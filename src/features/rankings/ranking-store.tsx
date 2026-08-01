@@ -6,15 +6,16 @@ import { useAuth } from '@/src/features/auth/auth-provider';
 import type { FeedPost } from '@/src/features/feed/types';
 import { mockFeedPosts } from '@/src/mock-data';
 import { shuffleItems } from './random';
-import type { CreateRankingInput, LocalComment } from './types';
+import type { CompletedPlay, CreateRankingInput, LocalComment, RankingOutcome } from './types';
 
 export type { CreateRankingInput, LocalComment, RankingFormat } from './types';
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error';
 
 type PersistedRankingState = {
-  version: 1;
+  version: 2;
   createdPosts: FeedPost[];
+  completedPlays: CompletedPlay[];
   likedPostIds: string[];
   savedPostIds: string[];
   followedCreatorIds: string[];
@@ -24,6 +25,7 @@ type PersistedRankingState = {
 type RankingStoreValue = {
   posts: readonly FeedPost[];
   createdPosts: readonly FeedPost[];
+  completedPlays: readonly CompletedPlay[];
   savedPosts: readonly FeedPost[];
   likedPostIds: readonly string[];
   savedPostIds: readonly string[];
@@ -34,6 +36,7 @@ type RankingStoreValue = {
   syncError?: string;
   syncStatus: SyncStatus;
   publishRanking: (input: CreateRankingInput) => Promise<void>;
+  recordCompletion: (post: FeedPost, outcome: RankingOutcome) => Promise<CompletedPlay>;
   shuffleFeed: () => void;
   toggleLike: (postId: string) => void;
   toggleSave: (postId: string) => void;
@@ -100,11 +103,12 @@ function createPost(input: CreateRankingInput): FeedPost {
 function readPersistedState(value: string | null): PersistedRankingState | null {
   if (!value) return null;
   try {
-    const parsed = JSON.parse(value) as Partial<PersistedRankingState>;
-    if (parsed.version !== 1) return null;
+    const parsed = JSON.parse(value) as Omit<Partial<PersistedRankingState>, 'version'> & { version?: number };
+    if (parsed.version !== 1 && parsed.version !== 2) return null;
     return {
-      version: 1,
+      version: 2,
       createdPosts: Array.isArray(parsed.createdPosts) ? parsed.createdPosts : [],
+      completedPlays: Array.isArray(parsed.completedPlays) ? parsed.completedPlays : [],
       likedPostIds: Array.isArray(parsed.likedPostIds) ? parsed.likedPostIds : [],
       savedPostIds: Array.isArray(parsed.savedPostIds) ? parsed.savedPostIds : [],
       followedCreatorIds: Array.isArray(parsed.followedCreatorIds) ? parsed.followedCreatorIds : [],
@@ -119,6 +123,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   const { isConfigured, user } = useAuth();
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => [...mockFeedPosts]);
   const [createdPosts, setCreatedPosts] = useState<FeedPost[]>([]);
+  const [completedPlays, setCompletedPlays] = useState<CompletedPlay[]>([]);
   const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
   const [followedCreatorIds, setFollowedCreatorIds] = useState<string[]>([]);
@@ -136,6 +141,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
         const persisted = readPersistedState(value);
         if (!persisted) return;
         setCreatedPosts(persisted.createdPosts);
+        setCompletedPlays(persisted.completedPlays);
         setLikedPostIds(persisted.likedPostIds);
         setSavedPostIds(persisted.savedPostIds);
         setFollowedCreatorIds(persisted.followedCreatorIds);
@@ -149,8 +155,9 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!isReady) return;
     const persisted: PersistedRankingState = {
-      version: 1,
+      version: 2,
       createdPosts,
+      completedPlays,
       likedPostIds,
       savedPostIds,
       followedCreatorIds,
@@ -159,7 +166,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
       .then(() => setStorageError(undefined))
       .catch(() => setStorageError('Changes could not be saved on this device.'));
-  }, [commentsByPost, createdPosts, followedCreatorIds, isReady, likedPostIds, savedPostIds]);
+  }, [commentsByPost, completedPlays, createdPosts, followedCreatorIds, isReady, likedPostIds, savedPostIds]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -169,6 +176,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       setLikedPostIds((current) => current.filter((id) => !isRemoteId(id)));
       setSavedPostIds((current) => current.filter((id) => !isRemoteId(id)));
       setFollowedCreatorIds((current) => current.filter((id) => !isRemoteId(id)));
+      setCompletedPlays((current) => current.filter((play) => !play.ownerId));
       setSyncError(undefined);
       setSyncStatus('local');
       return;
@@ -179,7 +187,8 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     Promise.all([
       supabaseFeedRepository.getFeed({ limit: 50, mode: 'for-you' }),
       supabaseSocialRepository.getSnapshot(user.id),
-    ]).then(([feed, social]) => {
+      supabaseRankingRepository.listCompletedSessions(user.id),
+    ]).then(([feed, social, remoteCompletedPlays]) => {
       if (!active) return;
       const remotePosts = feed.items.map((post) => social.likedPostIds.includes(post.id)
         ? { ...post, engagement: { ...post.engagement, likes: Math.max(0, post.engagement.likes - 1) } }
@@ -191,6 +200,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       setLikedPostIds((current) => mergeIds(current, social.likedPostIds));
       setSavedPostIds((current) => mergeIds(current, social.savedPostIds));
       setFollowedCreatorIds((current) => mergeIds(current, social.followedCreatorIds));
+      setCompletedPlays((current) => [...remoteCompletedPlays, ...current.filter((play) => !play.ownerId)]);
       setSyncError(undefined);
       setSyncStatus('synced');
     }).catch((error: unknown) => {
@@ -285,10 +295,43 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       setSyncStatus('error');
     }
   }, [user]);
+  const recordCompletion = useCallback(async (post: FeedPost, outcome: RankingOutcome) => {
+    const completedAt = new Date().toISOString();
+    const completion: CompletedPlay = {
+      id: `play-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      sourceId: post.id,
+      templateId: post.templateId,
+      title: post.title,
+      topic: post.topic,
+      kind: outcome.kind,
+      rankedItems: [...outcome.rankedItems],
+      completedAt,
+      ownerId: user?.id,
+      syncState: 'local',
+    };
+    setCompletedPlays((current) => [completion, ...current].slice(0, 100));
+    if (!user || !isRemoteId(post.id)) return completion;
+    setSyncStatus('syncing');
+    try {
+      const sessionId = await supabaseRankingRepository.completeSession(post.id, outcome.rankedItems);
+      const synced = { ...completion, id: sessionId, syncState: 'synced' as const };
+      setCompletedPlays((current) => current.map((item) => item.id === completion.id ? synced : item));
+      setSyncError(undefined);
+      setSyncStatus('synced');
+      return synced;
+    } catch (error) {
+      const failed = { ...completion, syncState: 'error' as const };
+      setCompletedPlays((current) => current.map((item) => item.id === completion.id ? failed : item));
+      setSyncError(errorMessage(error));
+      setSyncStatus('error');
+      return failed;
+    }
+  }, [user]);
 
   const value = useMemo<RankingStoreValue>(() => ({
     posts,
     createdPosts,
+    completedPlays,
     savedPosts,
     likedPostIds,
     savedPostIds,
@@ -305,7 +348,8 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     addComment,
     loadComments,
     publishRanking,
-  }), [addComment, commentsByPost, createdPosts, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishRanking, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave]);
+    recordCompletion,
+  }), [addComment, commentsByPost, completedPlays, createdPosts, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishRanking, recordCompletion, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave]);
 
   return <RankingStoreContext.Provider value={value}>{children}</RankingStoreContext.Provider>;
 }

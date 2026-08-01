@@ -17,3 +17,19 @@ export type LocalComment = {
   avatarLabel?: string;
   isOwn?: boolean;
 };
+
+export type RankingOutcome = {
+  kind: Extract<RankingFormat, 'blind-ranking' | 'bracket'>;
+  rankedItems: string[];
+};
+
+export type CompletedPlay = RankingOutcome & {
+  id: string;
+  sourceId: string;
+  templateId: string;
+  title: string;
+  topic: string;
+  completedAt: string;
+  ownerId?: string;
+  syncState: 'local' | 'synced' | 'error';
+};

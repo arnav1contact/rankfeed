@@ -12,7 +12,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { error: authError, isConfigured, isLoading: isAuthLoading, signOut, user } = useAuth();
   const { error: profileError, profile } = useAccountProfile();
-  const { createdPosts, followedCreatorIds, isReady, savedPosts, storageError, syncError, syncStatus } = useRankingStore();
+  const { completedPlays, createdPosts, isReady, savedPosts, storageError, syncError, syncStatus } = useRankingStore();
   const displayEmail = user?.email ?? null;
   const avatarLabel = profile?.displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || (displayEmail ? displayEmail.slice(0, 2).toUpperCase() : 'YO');
 
@@ -62,7 +62,7 @@ export default function ProfileScreen() {
       <View style={styles.stats}>
         <View style={styles.stat}><Text style={styles.statValue}>{createdPosts.length}</Text><Text style={styles.statLabel}>Published</Text></View>
         <View style={styles.divider} />
-        <View style={styles.stat}><Text style={styles.statValue}>{followedCreatorIds.length}</Text><Text style={styles.statLabel}>Following</Text></View>
+        <View style={styles.stat}><Text style={styles.statValue}>{completedPlays.length}</Text><Text style={styles.statLabel}>Played</Text></View>
         <View style={styles.divider} />
         <View style={styles.stat}><Text style={styles.statValue}>{savedPosts.length}</Text><Text style={styles.statLabel}>Saved</Text></View>
       </View>
@@ -78,6 +78,26 @@ export default function ProfileScreen() {
         <View style={styles.actionCopy}><Text style={styles.actionTitle}>View the live feed</Text><Text style={styles.actionText}>See your posts alongside the community</Text></View>
         <Ionicons color="#777A84" name="chevron-forward" size={19} />
       </Pressable>
+
+      <View style={styles.savedHeader}>
+        <Text style={styles.sectionTitle}>Recent results</Text>
+        <Text style={styles.savedCount}>{completedPlays.length}</Text>
+      </View>
+      {completedPlays.length === 0 ? (
+        <View style={styles.savedEmpty}>
+          <Ionicons color="#6F727C" name="trophy-outline" size={26} />
+          <Text style={styles.savedEmptyText}>Finish a ranking and your results will appear here.</Text>
+        </View>
+      ) : completedPlays.slice(0, 5).map((play) => (
+        <Pressable key={play.id} onPress={() => router.push({ pathname: '/play/[sourceId]', params: { sourceId: play.templateId || play.sourceId } })} style={({ pressed }) => [styles.historyRow, pressed && styles.pressed]}>
+          <View style={styles.historyIcon}><Ionicons color="#C8FF64" name={play.kind === 'bracket' ? 'trophy-outline' : 'podium-outline'} size={20} /></View>
+          <View style={styles.actionCopy}>
+            <Text numberOfLines={1} style={styles.actionTitle}>{play.title}</Text>
+            <Text numberOfLines={1} style={styles.actionText}>{play.kind === 'bracket' ? `Champion: ${play.rankedItems[0]}` : `#1 ${play.rankedItems[0]}`} · {new Date(play.completedAt).toLocaleDateString()}</Text>
+          </View>
+          <Ionicons color="#777A84" name="chevron-forward" size={18} />
+        </Pressable>
+      ))}
 
       <View style={styles.savedHeader}>
         <Text style={styles.sectionTitle}>Saved rankings</Text>
@@ -141,6 +161,8 @@ const styles = StyleSheet.create({
   savedEmpty: { alignItems: 'center', backgroundColor: '#12141A', borderRadius: radii.md, gap: spacing.sm, padding: spacing.xl },
   savedEmptyText: { color: '#8F929C', fontSize: 13 },
   savedRow: { alignItems: 'center', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 64, paddingVertical: spacing.sm },
+  historyRow: { alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 68, paddingHorizontal: spacing.sm },
+  historyIcon: { alignItems: 'center', backgroundColor: 'rgba(200, 255, 100, 0.1)', borderRadius: 16, height: 42, justifyContent: 'center', width: 42 },
   savedAccent: { borderRadius: radii.pill, height: 38, width: 5 },
   action: {
     alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1,

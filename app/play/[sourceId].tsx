@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
 import { PostStage } from '@/src/features/feed/components/post-stage';
@@ -9,15 +9,30 @@ import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { templateToFeedPost } from '@/src/features/rankings/template-post';
 import { mockRankingTemplates } from '@/src/mock-data';
 import { colors, radii, spacing } from '@/src/theme/tokens';
+import type { CompletedPlay, RankingOutcome } from '@/src/features/rankings/types';
 
 export default function PlayRankingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ sourceId?: string | string[] }>();
   const sourceId = Array.isArray(params.sourceId) ? params.sourceId[0] : params.sourceId;
-  const { posts } = useRankingStore();
+  const { posts, recordCompletion } = useRankingStore();
+  const [completedPlay, setCompletedPlay] = useState<CompletedPlay>();
   const template = mockRankingTemplates.find((item) => item.id === sourceId);
   const existingPost = posts.find((post) => post.id === sourceId || post.templateId === sourceId);
   const post = useMemo(() => template ? templateToFeedPost(template) : existingPost, [existingPost, template]);
+  const handleComplete = useCallback(async (outcome: RankingOutcome) => {
+    if (!post) return;
+    const completed = await recordCompletion(post, outcome);
+    setCompletedPlay(completed);
+  }, [post, recordCompletion]);
+
+  const shareResult = useCallback(async () => {
+    if (!completedPlay) return;
+    const result = completedPlay.kind === 'bracket'
+      ? `My champion: ${completedPlay.rankedItems[0]}`
+      : completedPlay.rankedItems.map((item, index) => `${index + 1}. ${item}`).join('\n');
+    await Share.share({ message: `${completedPlay.title}\n${result}\n\nMade with Rankfeed` });
+  }, [completedPlay]);
 
   if (!post) {
     return (
@@ -43,8 +58,29 @@ export default function PlayRankingScreen() {
       </View>
       <Text style={styles.instructions}>{post.kind === 'blind-ranking' ? 'Place each surprise item before the next one is revealed.' : post.kind === 'bracket' ? 'Choose one winner from every matchup until a champion remains.' : 'See how this creator ordered their favorites.'}</Text>
       <View style={[styles.gameCard, { borderColor: post.visual.accentColor }]}>
-        <PostStage post={post} />
+        <PostStage onComplete={handleComplete} post={post} />
       </View>
+      {completedPlay ? (
+        <View style={styles.receipt}>
+          <View style={styles.receiptHeader}>
+            <View style={styles.receiptIcon}><Ionicons color="#13160D" name="checkmark" size={18} /></View>
+            <View style={styles.receiptCopy}>
+              <Text style={styles.receiptTitle}>Saved to your history</Text>
+              <Text style={styles.receiptMeta}>{completedPlay.syncState === 'synced' ? 'Synced with your account' : completedPlay.syncState === 'error' ? 'Saved locally — cloud sync will need attention' : 'Available on this device'}</Text>
+            </View>
+          </View>
+          {completedPlay.rankedItems.map((item, index) => (
+            <View key={`${item}-${index}`} style={styles.resultRow}>
+              <Text style={styles.resultRank}>{completedPlay.kind === 'bracket' ? '🏆' : index + 1}</Text>
+              <Text style={styles.resultItem}>{item}</Text>
+            </View>
+          ))}
+          <View style={styles.receiptActions}>
+            <Pressable onPress={() => void shareResult()} style={({ pressed }) => [styles.receiptButton, pressed && styles.pressed]}><Ionicons color="#C8FF64" name="share-outline" size={18} /><Text style={styles.receiptButtonText}>Share</Text></Pressable>
+            <Pressable onPress={() => router.push('/profile')} style={({ pressed }) => [styles.receiptButton, pressed && styles.pressed]}><Ionicons color="#C8FF64" name="time-outline" size={18} /><Text style={styles.receiptButtonText}>History</Text></Pressable>
+          </View>
+        </View>
+      ) : null}
       <Pressable onPress={() => router.push({ pathname: '/create', params: { templateId: post.templateId } })} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
         <Ionicons color="#C8FF64" name="create-outline" size={19} />
         <Text style={styles.secondaryText}>Customize and publish your own</Text>
@@ -62,6 +98,18 @@ const styles = StyleSheet.create({
   poolCount: { color: '#92959F', fontSize: 11 },
   instructions: { color: '#C6C8CE', fontSize: 14, lineHeight: 21, marginTop: spacing.md },
   gameCard: { backgroundColor: '#15171D', borderRadius: radii.lg, borderWidth: 1, marginTop: spacing.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.xl },
+  receipt: { backgroundColor: '#12151A', borderColor: '#343B2A', borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, marginTop: spacing.lg, padding: spacing.md },
+  receiptHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xs },
+  receiptIcon: { alignItems: 'center', backgroundColor: '#C8FF64', borderRadius: 16, height: 32, justifyContent: 'center', width: 32 },
+  receiptCopy: { flex: 1 },
+  receiptTitle: { color: colors.foreground, fontSize: 14, fontWeight: '900' },
+  receiptMeta: { color: '#8F929C', fontSize: 11, marginTop: 2 },
+  resultRow: { alignItems: 'center', backgroundColor: '#1A1D24', borderRadius: radii.sm, flexDirection: 'row', gap: spacing.md, minHeight: 40, paddingHorizontal: spacing.md },
+  resultRank: { color: '#C8FF64', fontSize: 15, fontWeight: '900', textAlign: 'center', width: 22 },
+  resultItem: { color: colors.foreground, flex: 1, fontSize: 13, fontWeight: '700' },
+  receiptActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  receiptButton: { alignItems: 'center', borderColor: '#3A422B', borderRadius: radii.pill, borderWidth: 1, flex: 1, flexDirection: 'row', gap: spacing.xs, justifyContent: 'center', minHeight: 42 },
+  receiptButtonText: { color: '#C8FF64', fontSize: 12, fontWeight: '800' },
   secondaryButton: { alignItems: 'center', borderColor: '#3A422B', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', marginTop: spacing.xl, minHeight: 50, paddingHorizontal: spacing.lg },
   secondaryText: { color: colors.foreground, fontSize: 14, fontWeight: '800' },
   primaryButton: { alignItems: 'center', backgroundColor: '#C8FF64', borderRadius: radii.pill, justifyContent: 'center', marginTop: spacing.xl, minHeight: 50 },

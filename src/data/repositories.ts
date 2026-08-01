@@ -1,5 +1,5 @@
 import type { FeedPost } from '@/src/features/feed/types';
-import type { CreateRankingInput, LocalComment } from '@/src/features/rankings/types';
+import type { CompletedPlay, CreateRankingInput, LocalComment } from '@/src/features/rankings/types';
 
 export type CursorPage<T> = {
   items: readonly T[];
@@ -61,6 +61,8 @@ export interface FeedRepository {
 
 export interface RankingRepository {
   createPublished(input: CreateRankingInput): Promise<FeedPost>;
+  completeSession(postId: string, rankedItems: readonly string[]): Promise<string>;
+  listCompletedSessions(userId: string): Promise<CompletedPlay[]>;
   createDraft(input: CreateRankingInput): Promise<FeedPost>;
   updateDraft(postId: string, input: CreateRankingInput): Promise<FeedPost>;
   publish(postId: string): Promise<FeedPost>;

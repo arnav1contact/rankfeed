@@ -1,5 +1,5 @@
 import type { FeedPost } from '@/src/features/feed/types';
-import type { CreateRankingInput, LocalComment } from '@/src/features/rankings/types';
+import type { CompletedPlay, CreateRankingInput, LocalComment } from '@/src/features/rankings/types';
 import { getSupabaseClient } from '@/src/lib/supabase';
 import type { CursorPage, FeedQuery, FeedRepository, SocialRepository, SocialSnapshot } from './repositories';
 
@@ -163,6 +163,52 @@ export const supabaseRankingRepository = {
     if (error) throw error;
     if (typeof data !== 'string') throw new Error('The published ranking did not return an id.');
     return getPost(data);
+  },
+  async completeSession(postId: string, rankedItems: readonly string[]): Promise<string> {
+    const { data, error } = await getSupabaseClient().rpc('complete_ranking_session', {
+      p_post_id: postId,
+      p_ranked_labels: [...rankedItems],
+    });
+    if (error) throw error;
+    if (typeof data !== 'string') throw new Error('The completed ranking did not return a session id.');
+    return data;
+  },
+  async listCompletedSessions(userId: string): Promise<CompletedPlay[]> {
+    const { data, error } = await getSupabaseClient()
+      .from('ranking_sessions')
+      .select('id, post_id, completed_at, posts(id, template_id, format, title, topic), ranking_placements(rank, post_items(label))')
+      .eq('player_id', userId)
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    type SessionRow = {
+      id: string;
+      post_id: string;
+      completed_at: string;
+      posts: { id: string; template_id: string | null; format: 'blind-ranking' | 'bracket'; title: string; topic: string } | { id: string; template_id: string | null; format: 'blind-ranking' | 'bracket'; title: string; topic: string }[];
+      ranking_placements: { rank: number; post_items: { label: string } | { label: string }[] }[];
+    };
+    return ((data ?? []) as unknown as SessionRow[]).flatMap((row) => {
+      const post = Array.isArray(row.posts) ? row.posts[0] : row.posts;
+      if (!post) return [];
+      const rankedItems = [...row.ranking_placements]
+        .sort((left, right) => left.rank - right.rank)
+        .map((placement) => Array.isArray(placement.post_items) ? placement.post_items[0]?.label : placement.post_items?.label)
+        .filter((label): label is string => Boolean(label));
+      return [{
+        id: row.id,
+        sourceId: row.post_id,
+        templateId: post.template_id ?? row.post_id,
+        title: post.title,
+        topic: post.topic,
+        kind: post.format,
+        rankedItems,
+        completedAt: row.completed_at,
+        ownerId: userId,
+        syncState: 'synced' as const,
+      }];
+    });
   },
 };
 

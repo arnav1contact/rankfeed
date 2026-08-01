@@ -3,11 +3,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radii, spacing } from '@/src/theme/tokens';
 import { sampleItems } from '@/src/features/rankings/random';
+import type { RankingOutcome } from '@/src/features/rankings/types';
 import type { FeedPost } from '../types';
 
-type PostStageProps = { post: FeedPost };
+type PostStageProps = { post: FeedPost; onComplete?: (outcome: RankingOutcome) => void };
 
-function BlindRankingStage({ post }: { post: Extract<FeedPost, { kind: 'blind-ranking' }> }) {
+function BlindRankingStage({ onComplete, post }: { post: Extract<FeedPost, { kind: 'blind-ranking' }>; onComplete?: (outcome: RankingOutcome) => void }) {
   const [draw, setDraw] = useState(() => post.items.slice(0, post.slotCount));
   const [itemIndex, setItemIndex] = useState(0);
   const [slots, setSlots] = useState<(string | null)[]>(() => Array.from({ length: post.slotCount }, () => null));
@@ -22,8 +23,12 @@ function BlindRankingStage({ post }: { post: Extract<FeedPost, { kind: 'blind-ra
 
   const placeItem = (slotIndex: number) => {
     if (complete || slots[slotIndex] || !currentItem) return;
-    setSlots((current) => current.map((item, index) => index === slotIndex ? currentItem : item));
+    const nextSlots = slots.map((item, index) => index === slotIndex ? currentItem : item);
+    setSlots(nextSlots);
     setItemIndex((current) => current + 1);
+    if (itemIndex + 1 === draw.length) {
+      onComplete?.({ kind: 'blind-ranking', rankedItems: nextSlots.filter((item): item is string => Boolean(item)) });
+    }
   };
 
   const reset = () => {
@@ -69,7 +74,7 @@ function BlindRankingStage({ post }: { post: Extract<FeedPost, { kind: 'blind-ra
   );
 }
 
-function BracketStage({ post }: { post: Extract<FeedPost, { kind: 'bracket' }> }) {
+function BracketStage({ onComplete, post }: { post: Extract<FeedPost, { kind: 'bracket' }>; onComplete?: (outcome: RankingOutcome) => void }) {
   const drawSize = post.participants.length >= 8 ? 8 : post.participants.length >= 4 ? 4 : 2;
   const createDraw = () => sampleItems(post.participants.length >= 2 ? post.participants : post.matchup, drawSize);
   const [initialParticipants, setInitialParticipants] = useState(() => post.participants.slice(0, drawSize));
@@ -100,6 +105,7 @@ function BracketStage({ post }: { post: Extract<FeedPost, { kind: 'bracket' }> }
     }
     if (winners.length === 1) {
       setChampion(winners[0]);
+      onComplete?.({ kind: 'bracket', rankedItems: [winners[0]] });
       return;
     }
     setRound(winners);
@@ -179,12 +185,12 @@ function CompletedResultStage({ post }: { post: Extract<FeedPost, { kind: 'compl
   );
 }
 
-export function PostStage({ post }: PostStageProps) {
+export function PostStage({ onComplete, post }: PostStageProps) {
   switch (post.kind) {
     case 'blind-ranking':
-      return <BlindRankingStage post={post} />;
+      return <BlindRankingStage onComplete={onComplete} post={post} />;
     case 'bracket':
-      return <BracketStage post={post} />;
+      return <BracketStage onComplete={onComplete} post={post} />;
     case 'completed-result':
       return <CompletedResultStage post={post} />;
   }
