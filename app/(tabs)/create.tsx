@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
+import { useAuth } from '@/src/features/auth/auth-provider';
 import { useRankingStore, type RankingFormat } from '@/src/features/rankings/ranking-store';
 import { mockRankingTemplates } from '@/src/mock-data';
 import { colors, radii, spacing } from '@/src/theme/tokens';
@@ -16,6 +17,7 @@ const formats: readonly { format: RankingFormat; icon: React.ComponentProps<type
 
 export default function CreateScreen() {
   const router = useRouter();
+  const { isConfigured, user } = useAuth();
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
   const { publishRanking } = useRankingStore();
   const initialTemplate = mockRankingTemplates.find((item) => item.id === templateId);
@@ -37,6 +39,10 @@ export default function CreateScreen() {
   }, [templateId]);
 
   const publish = () => {
+    if (isConfigured && !user) {
+      router.push('/sign-in');
+      return;
+    }
     setAttempted(true);
     if (!canPublish) return;
     publishRanking({
@@ -55,6 +61,17 @@ export default function CreateScreen() {
   return (
     <ScreenShell eyebrow="Start something" title="Create a ranking">
       <Text style={styles.intro}>Choose a format, add a prompt, and publish it straight into the Rankings feed.</Text>
+
+      {isConfigured && !user ? (
+        <Pressable onPress={() => router.push('/sign-in')} style={({ pressed }) => [styles.accountBanner, pressed && styles.pressed]}>
+          <Ionicons color="#C8FF64" name="person-circle-outline" size={24} />
+          <View style={styles.accountCopy}>
+            <Text style={styles.accountTitle}>Sign in to publish</Text>
+            <Text style={styles.accountText}>Your drafts stay here while your published rankings sync to your account.</Text>
+          </View>
+          <Ionicons color="#8F929C" name="chevron-forward" size={19} />
+        </Pressable>
+      ) : null}
 
       <Text style={styles.label}>Format</Text>
       <View style={styles.formats}>
@@ -128,6 +145,10 @@ export default function CreateScreen() {
 
 const styles = StyleSheet.create({
   intro: { color: colors.muted, fontSize: 15, lineHeight: 22, marginBottom: spacing.xl, marginTop: spacing.sm, maxWidth: 430 },
+  accountBanner: { alignItems: 'center', backgroundColor: '#171A1E', borderColor: '#3A422B', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl, marginTop: -spacing.sm, padding: spacing.md },
+  accountCopy: { flex: 1 },
+  accountTitle: { color: colors.foreground, fontSize: 14, fontWeight: '900' },
+  accountText: { color: '#9DA0A8', fontSize: 12, lineHeight: 17, marginTop: 3 },
   label: { color: colors.foreground, fontSize: 13, fontWeight: '800', marginBottom: spacing.sm },
   formats: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl },
   format: {

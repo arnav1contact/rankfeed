@@ -3,25 +3,52 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
+import { useAuth } from '@/src/features/auth/auth-provider';
 import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { error: authError, isConfigured, isLoading: isAuthLoading, signOut, user } = useAuth();
   const { createdPosts, followedCreatorIds, isReady, savedPosts, storageError } = useRankingStore();
+  const displayEmail = user?.email ?? null;
+  const avatarLabel = displayEmail ? displayEmail.slice(0, 2).toUpperCase() : 'YO';
 
   return (
     <ScreenShell eyebrow="Your corner" title="Profile">
       <View style={styles.identity}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>YO</Text></View>
+        <View style={styles.avatar}><Text style={styles.avatarText}>{avatarLabel}</Text></View>
         <View style={styles.identityCopy}>
-          <Text style={styles.name}>Your Rankings</Text>
-          <Text style={styles.handle}>@yourrankings</Text>
+          <Text style={styles.name}>{displayEmail ? 'Rankfeed account' : 'Your Rankings'}</Text>
+          <Text numberOfLines={1} style={styles.handle}>{displayEmail ?? (isConfigured ? 'Sign in to sync your profile' : 'Local developer profile')}</Text>
         </View>
         <View accessibilityLabel={isReady ? 'Local data loaded' : 'Loading local data'} style={styles.settings}>
           <Ionicons color={storageError ? '#FF879A' : '#C8FF64'} name={storageError ? 'cloud-offline-outline' : isReady ? 'cloud-done-outline' : 'cloud-outline'} size={20} />
         </View>
       </View>
+
+      {isConfigured ? (
+        user ? (
+          <Pressable disabled={isAuthLoading} onPress={() => void signOut().catch(() => undefined)} style={({ pressed }) => [styles.accountAction, pressed && styles.pressed]}>
+            <Ionicons color="#C8FF64" name="cloud-done-outline" size={20} />
+            <Text style={styles.accountActionText}>Signed in · Sign out</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={() => router.push('/sign-in')} style={({ pressed }) => [styles.signInAction, pressed && styles.pressed]}>
+            <Ionicons color="#13160D" name="person-outline" size={20} />
+            <Text style={styles.signInText}>Sign in or create an account</Text>
+          </Pressable>
+        )
+      ) : (
+        <View style={styles.devMode}>
+          <Ionicons color="#C8FF64" name="construct-outline" size={19} />
+          <View style={styles.actionCopy}>
+            <Text style={styles.devModeTitle}>Local developer mode</Text>
+            <Text style={styles.devModeText}>The app remains fully testable before Supabase credentials are connected.</Text>
+          </View>
+        </View>
+      )}
+      {authError ? <Text accessibilityRole="alert" style={styles.authError}>{authError}</Text> : null}
 
       <View style={styles.stats}>
         <View style={styles.stat}><Text style={styles.statValue}>{createdPosts.length}</Text><Text style={styles.statLabel}>Published</Text></View>
@@ -65,7 +92,7 @@ export default function ProfileScreen() {
 
       <View style={styles.note}>
         <Ionicons color={storageError ? '#FF879A' : '#9EA1AA'} name={storageError ? 'warning-outline' : 'phone-portrait-outline'} size={19} />
-        <Text style={styles.noteText}>{storageError ?? 'Rankings, likes, saves, follows, and comments are stored on this device. Account sync is the next backend milestone.'}</Text>
+        <Text style={styles.noteText}>{storageError ?? (user ? 'Your account session is securely restored across launches. Ranking sync will move to the backend repository in the next milestone.' : 'Rankings, likes, saves, follows, and comments are currently stored on this device.')}</Text>
       </View>
     </ScreenShell>
   );
@@ -79,6 +106,14 @@ const styles = StyleSheet.create({
   name: { color: colors.foreground, fontSize: 20, fontWeight: '900' },
   handle: { color: '#8F929C', fontSize: 13, marginTop: 3 },
   settings: { alignItems: 'center', backgroundColor: '#191B22', borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
+  accountAction: { alignItems: 'center', alignSelf: 'flex-start', borderColor: '#39412C', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  accountActionText: { color: colors.foreground, fontSize: 13, fontWeight: '800' },
+  signInAction: { alignItems: 'center', backgroundColor: '#C8FF64', borderRadius: radii.pill, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', marginTop: spacing.lg, minHeight: 50, paddingHorizontal: spacing.lg },
+  signInText: { color: '#13160D', fontSize: 14, fontWeight: '900' },
+  devMode: { alignItems: 'center', backgroundColor: '#15181B', borderColor: '#333A2A', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg, padding: spacing.md },
+  devModeTitle: { color: colors.foreground, fontSize: 13, fontWeight: '900' },
+  devModeText: { color: '#999CA5', fontSize: 11, lineHeight: 16, marginTop: 2 },
+  authError: { color: '#FF879A', fontSize: 12, marginTop: spacing.sm },
   stats: {
     alignItems: 'center', backgroundColor: '#13151B', borderColor: '#292C35', borderRadius: radii.lg,
     borderWidth: 1, flexDirection: 'row', justifyContent: 'space-around', marginTop: spacing.xl, paddingVertical: spacing.lg,
