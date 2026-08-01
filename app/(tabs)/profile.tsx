@@ -12,7 +12,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { error: authError, isConfigured, isLoading: isAuthLoading, signOut, user } = useAuth();
   const { error: profileError, profile } = useAccountProfile();
-  const { completedPlays, createdPosts, drafts, isReady, savedPosts, storageError, syncError, syncStatus } = useRankingStore();
+  const { blockedCreators, completedPlays, createdPosts, drafts, isReady, savedPosts, storageError, syncError, syncStatus, unblockCreator } = useRankingStore();
   const displayEmail = user?.email ?? null;
   const avatarLabel = profile?.displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || (displayEmail ? displayEmail.slice(0, 2).toUpperCase() : 'YO');
 
@@ -94,6 +94,25 @@ export default function ProfileScreen() {
               </View>
               <Ionicons color="#777A84" name="chevron-forward" size={18} />
             </Pressable>
+          ))}
+        </>
+      ) : null}
+
+      {blockedCreators.length > 0 ? (
+        <>
+          <View style={styles.savedHeader}>
+            <Text style={styles.sectionTitle}>Blocked creators</Text>
+            <Text style={styles.savedCount}>{blockedCreators.length}</Text>
+          </View>
+          {blockedCreators.map((creator) => (
+            <View key={creator.id} style={styles.historyRow}>
+              <View style={styles.blockedAvatar}><Text style={styles.blockedAvatarText}>{creator.avatarLabel}</Text></View>
+              <View style={styles.actionCopy}>
+                <Text numberOfLines={1} style={styles.actionTitle}>{creator.displayName}</Text>
+                <Text numberOfLines={1} style={styles.actionText}>{creator.handle}</Text>
+              </View>
+              <Pressable accessibilityLabel={`Unblock ${creator.displayName}`} onPress={() => void unblockCreator(creator.id).catch(() => undefined)} style={({ pressed }) => [styles.unblockButton, pressed && styles.pressed]}><Text style={styles.unblockText}>Unblock</Text></Pressable>
+            </View>
           ))}
         </>
       ) : null}
@@ -183,6 +202,10 @@ const styles = StyleSheet.create({
   historyRow: { alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 68, paddingHorizontal: spacing.sm },
   historyIcon: { alignItems: 'center', backgroundColor: 'rgba(200, 255, 100, 0.1)', borderRadius: 16, height: 42, justifyContent: 'center', width: 42 },
   draftIcon: { alignItems: 'center', backgroundColor: 'rgba(255, 203, 107, 0.1)', borderRadius: 16, height: 42, justifyContent: 'center', width: 42 },
+  blockedAvatar: { alignItems: 'center', backgroundColor: '#29222A', borderRadius: 21, height: 42, justifyContent: 'center', width: 42 },
+  blockedAvatarText: { color: '#FFB1BE', fontSize: 11, fontWeight: '900' },
+  unblockButton: { borderColor: '#555964', borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 8 },
+  unblockText: { color: colors.foreground, fontSize: 11, fontWeight: '900' },
   savedAccent: { borderRadius: radii.pill, height: 38, width: 5 },
   action: {
     alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1,

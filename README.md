@@ -8,6 +8,7 @@ A mobile-first social app for creating, discovering, and playing interactive ran
 - A Create flow that publishes new rankings into the live session feed
 - Automatic offline draft saving with resume and discard controls
 - One-tap publishing from a completed game into Finished Lists
+- Feed-level reporting and creator blocking with Profile unblock controls
 - Search and category filtering in Explore
 - Home activity and session-aware Profile views
 

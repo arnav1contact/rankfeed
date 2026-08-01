@@ -38,6 +38,11 @@ export type SocialSnapshot = {
   savedPostIds: readonly string[];
 };
 
+export type ModerationSnapshot = {
+  blockedCreatorIds: readonly string[];
+  reportedPostIds: readonly string[];
+};
+
 export interface AuthRepository {
   getSession(): Promise<AuthSession | null>;
   signInWithEmail(email: string): Promise<void>;
@@ -83,6 +88,7 @@ export interface SocialRepository {
 }
 
 export interface ModerationRepository {
+  getSnapshot(userId: string): Promise<ModerationSnapshot>;
   report(input: ReportInput): Promise<void>;
 }
 

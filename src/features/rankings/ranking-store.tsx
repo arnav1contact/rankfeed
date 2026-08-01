@@ -2,21 +2,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
 import { isRemoteId, supabaseFeedRepository, supabaseRankingRepository, supabaseSocialRepository } from '@/src/data/supabase-ranking-repositories';
+import { supabaseModerationRepository } from '@/src/data/supabase-moderation-repository';
+import { supabaseProfileRepository } from '@/src/data/supabase-profile-repository';
 import { useAuth } from '@/src/features/auth/auth-provider';
-import type { FeedPost } from '@/src/features/feed/types';
+import type { Creator, FeedPost } from '@/src/features/feed/types';
 import { mockFeedPosts } from '@/src/mock-data';
 import { shuffleItems } from './random';
-import type { CompletedPlay, CreateRankingInput, LocalComment, RankingDraft, RankingOutcome } from './types';
+import type { CompletedPlay, CreateRankingInput, LocalComment, RankingDraft, RankingOutcome, ReportReason } from './types';
 
 export type { CreateRankingInput, LocalComment, RankingDraft, RankingFormat } from './types';
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error';
 
 type PersistedRankingState = {
-  version: 3;
+  version: 4;
   createdPosts: FeedPost[];
   completedPlays: CompletedPlay[];
   drafts: RankingDraft[];
+  blockedCreatorIds: string[];
+  reportedPostIds: string[];
   likedPostIds: string[];
   savedPostIds: string[];
   followedCreatorIds: string[];
@@ -28,6 +32,9 @@ type RankingStoreValue = {
   createdPosts: readonly FeedPost[];
   completedPlays: readonly CompletedPlay[];
   drafts: readonly RankingDraft[];
+  blockedCreatorIds: readonly string[];
+  blockedCreators: readonly Creator[];
+  reportedPostIds: readonly string[];
   savedPosts: readonly FeedPost[];
   likedPostIds: readonly string[];
   savedPostIds: readonly string[];
@@ -42,6 +49,9 @@ type RankingStoreValue = {
   recordCompletion: (post: FeedPost, outcome: RankingOutcome) => Promise<CompletedPlay>;
   saveDraft: (draftId: string, input: CreateRankingInput) => RankingDraft;
   deleteDraft: (draftId: string) => void;
+  blockCreator: (creatorId: string) => Promise<void>;
+  unblockCreator: (creatorId: string) => Promise<void>;
+  reportPost: (postId: string, reason: ReportReason) => Promise<void>;
   shuffleFeed: () => void;
   toggleLike: (postId: string) => void;
   toggleSave: (postId: string) => void;
@@ -109,12 +119,14 @@ function readPersistedState(value: string | null): PersistedRankingState | null 
   if (!value) return null;
   try {
     const parsed = JSON.parse(value) as Omit<Partial<PersistedRankingState>, 'version'> & { version?: number };
-    if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) return null;
+    if (![1, 2, 3, 4].includes(parsed.version ?? 0)) return null;
     return {
-      version: 3,
+      version: 4,
       createdPosts: Array.isArray(parsed.createdPosts) ? parsed.createdPosts : [],
       completedPlays: Array.isArray(parsed.completedPlays) ? parsed.completedPlays : [],
       drafts: Array.isArray(parsed.drafts) ? parsed.drafts : [],
+      blockedCreatorIds: Array.isArray(parsed.blockedCreatorIds) ? parsed.blockedCreatorIds : [],
+      reportedPostIds: Array.isArray(parsed.reportedPostIds) ? parsed.reportedPostIds : [],
       likedPostIds: Array.isArray(parsed.likedPostIds) ? parsed.likedPostIds : [],
       savedPostIds: Array.isArray(parsed.savedPostIds) ? parsed.savedPostIds : [],
       followedCreatorIds: Array.isArray(parsed.followedCreatorIds) ? parsed.followedCreatorIds : [],
@@ -131,6 +143,8 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   const [createdPosts, setCreatedPosts] = useState<FeedPost[]>([]);
   const [completedPlays, setCompletedPlays] = useState<CompletedPlay[]>([]);
   const [drafts, setDrafts] = useState<RankingDraft[]>([]);
+  const [blockedCreatorIds, setBlockedCreatorIds] = useState<string[]>([]);
+  const [reportedPostIds, setReportedPostIds] = useState<string[]>([]);
   const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
   const [followedCreatorIds, setFollowedCreatorIds] = useState<string[]>([]);
@@ -150,6 +164,8 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
         setCreatedPosts(persisted.createdPosts);
         setCompletedPlays(persisted.completedPlays);
         setDrafts(persisted.drafts);
+        setBlockedCreatorIds(persisted.blockedCreatorIds);
+        setReportedPostIds(persisted.reportedPostIds);
         setLikedPostIds(persisted.likedPostIds);
         setSavedPostIds(persisted.savedPostIds);
         setFollowedCreatorIds(persisted.followedCreatorIds);
@@ -163,10 +179,12 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!isReady) return;
     const persisted: PersistedRankingState = {
-      version: 3,
+      version: 4,
       createdPosts,
       completedPlays,
       drafts,
+      blockedCreatorIds,
+      reportedPostIds,
       likedPostIds,
       savedPostIds,
       followedCreatorIds,
@@ -175,7 +193,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
       .then(() => setStorageError(undefined))
       .catch(() => setStorageError('Changes could not be saved on this device.'));
-  }, [commentsByPost, completedPlays, createdPosts, drafts, followedCreatorIds, isReady, likedPostIds, savedPostIds]);
+  }, [blockedCreatorIds, commentsByPost, completedPlays, createdPosts, drafts, followedCreatorIds, isReady, likedPostIds, reportedPostIds, savedPostIds]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -186,6 +204,8 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       setSavedPostIds((current) => current.filter((id) => !isRemoteId(id)));
       setFollowedCreatorIds((current) => current.filter((id) => !isRemoteId(id)));
       setCompletedPlays((current) => current.filter((play) => !play.ownerId));
+      setBlockedCreatorIds((current) => current.filter((id) => !isRemoteId(id)));
+      setReportedPostIds((current) => current.filter((id) => !isRemoteId(id)));
       setSyncError(undefined);
       setSyncStatus('local');
       return;
@@ -197,7 +217,8 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       supabaseFeedRepository.getFeed({ limit: 50, mode: 'for-you' }),
       supabaseSocialRepository.getSnapshot(user.id),
       supabaseRankingRepository.listCompletedSessions(user.id),
-    ]).then(([feed, social, remoteCompletedPlays]) => {
+      supabaseModerationRepository.getSnapshot(user.id),
+    ]).then(([feed, social, remoteCompletedPlays, moderation]) => {
       if (!active) return;
       const remotePosts = feed.items.map((post) => social.likedPostIds.includes(post.id)
         ? { ...post, engagement: { ...post.engagement, likes: Math.max(0, post.engagement.likes - 1) } }
@@ -210,6 +231,8 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       setSavedPostIds((current) => mergeIds(current, social.savedPostIds));
       setFollowedCreatorIds((current) => mergeIds(current, social.followedCreatorIds));
       setCompletedPlays((current) => [...remoteCompletedPlays, ...current.filter((play) => !play.ownerId)]);
+      setBlockedCreatorIds((current) => mergeIds(current, moderation.blockedCreatorIds));
+      setReportedPostIds((current) => mergeIds(current, moderation.reportedPostIds));
       setSyncError(undefined);
       setSyncStatus('synced');
     }).catch((error: unknown) => {
@@ -220,7 +243,14 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     return () => { active = false; };
   }, [isConfigured, isReady, user]);
 
-  const posts = useMemo(() => [...createdPosts, ...feedPosts], [createdPosts, feedPosts]);
+  const allPosts = useMemo(() => [...createdPosts, ...feedPosts], [createdPosts, feedPosts]);
+  const posts = useMemo(() => allPosts.filter((post) => !blockedCreatorIds.includes(post.creator.id)), [allPosts, blockedCreatorIds]);
+  const blockedCreators = useMemo(() => blockedCreatorIds.map((creatorId) => allPosts.find((post) => post.creator.id === creatorId)?.creator ?? {
+    id: creatorId,
+    displayName: 'Blocked creator',
+    handle: 'Hidden account',
+    avatarLabel: '—',
+  }), [allPosts, blockedCreatorIds]);
   const visibleDrafts = useMemo(() => drafts.filter((draft) => !draft.ownerId || draft.ownerId === user?.id), [drafts, user?.id]);
   const savedPosts = useMemo(() => posts.filter((post) => savedPostIds.includes(post.id)), [posts, savedPostIds]);
   const shuffleFeed = useCallback(() => setFeedPosts((current) => shuffleItems(current)), []);
@@ -364,12 +394,64 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   const deleteDraft = useCallback((draftId: string) => {
     setDrafts((current) => current.filter((draft) => draft.id !== draftId));
   }, []);
+  const blockCreator = useCallback(async (creatorId: string) => {
+    if (user?.id === creatorId || creatorId === 'creator-you') return;
+    setBlockedCreatorIds((current) => current.includes(creatorId) ? current : [...current, creatorId]);
+    setFollowedCreatorIds((current) => current.filter((id) => id !== creatorId));
+    if (!user || !isRemoteId(creatorId)) return;
+    setSyncStatus('syncing');
+    try {
+      await supabaseProfileRepository.block(creatorId);
+      setSyncError(undefined);
+      setSyncStatus('synced');
+    } catch (error) {
+      setBlockedCreatorIds((current) => current.filter((id) => id !== creatorId));
+      setSyncError(errorMessage(error));
+      setSyncStatus('error');
+      throw error;
+    }
+  }, [user]);
+  const unblockCreator = useCallback(async (creatorId: string) => {
+    setBlockedCreatorIds((current) => current.filter((id) => id !== creatorId));
+    if (!user || !isRemoteId(creatorId)) return;
+    setSyncStatus('syncing');
+    try {
+      await supabaseProfileRepository.unblock(creatorId);
+      const feed = await supabaseFeedRepository.getFeed({ limit: 50, mode: 'for-you' });
+      setFeedPosts(feed.items.filter((post) => post.creator.id !== user.id));
+      setSyncError(undefined);
+      setSyncStatus('synced');
+    } catch (error) {
+      setBlockedCreatorIds((current) => current.includes(creatorId) ? current : [...current, creatorId]);
+      setSyncError(errorMessage(error));
+      setSyncStatus('error');
+      throw error;
+    }
+  }, [user]);
+  const reportPost = useCallback(async (postId: string, reason: ReportReason) => {
+    setReportedPostIds((current) => current.includes(postId) ? current : [...current, postId]);
+    if (!user || !isRemoteId(postId)) return;
+    setSyncStatus('syncing');
+    try {
+      await supabaseModerationRepository.report({ reason, targetId: postId, targetType: 'post' });
+      setSyncError(undefined);
+      setSyncStatus('synced');
+    } catch (error) {
+      setReportedPostIds((current) => current.filter((id) => id !== postId));
+      setSyncError(errorMessage(error));
+      setSyncStatus('error');
+      throw error;
+    }
+  }, [user]);
 
   const value = useMemo<RankingStoreValue>(() => ({
     posts,
     createdPosts,
     completedPlays,
     drafts: visibleDrafts,
+    blockedCreatorIds,
+    blockedCreators,
+    reportedPostIds,
     savedPosts,
     likedPostIds,
     savedPostIds,
@@ -390,7 +472,10 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     recordCompletion,
     saveDraft,
     deleteDraft,
-  }), [addComment, commentsByPost, completedPlays, createdPosts, deleteDraft, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishCompletedPlay, publishRanking, recordCompletion, saveDraft, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, visibleDrafts]);
+    blockCreator,
+    unblockCreator,
+    reportPost,
+  }), [addComment, blockCreator, blockedCreatorIds, blockedCreators, commentsByPost, completedPlays, createdPosts, deleteDraft, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishCompletedPlay, publishRanking, recordCompletion, reportPost, reportedPostIds, saveDraft, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, unblockCreator, visibleDrafts]);
 
   return <RankingStoreContext.Provider value={value}>{children}</RankingStoreContext.Provider>;
 }

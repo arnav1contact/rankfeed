@@ -12,6 +12,7 @@ import type { FeedPost as FeedPostModel } from '../types';
 import { EngagementRail } from './engagement-rail';
 import { CommentsModal } from './comments-modal';
 import { PostStage } from './post-stage';
+import { PostOptionsModal } from './post-options-modal';
 
 type FeedPostProps = { post: FeedPostModel; viewportHeight: number };
 
@@ -20,7 +21,9 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const [commentsOpen, setCommentsOpen] = useState(false);
-  const { followedCreatorIds, toggleFollow } = useRankingStore();
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [completionSaved, setCompletionSaved] = useState(false);
+  const { followedCreatorIds, recordCompletion, toggleFollow } = useRankingStore();
   const following = followedCreatorIds.includes(post.creator.id);
 
   return (
@@ -40,9 +43,14 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
           <Text style={styles.feedTitle}>Play feed</Text>
           <Text style={styles.feedHint}>Swipe for another</Text>
         </View>
-        <Pressable accessibilityLabel="Search" accessibilityRole="button" hitSlop={10} onPress={() => router.navigate('/explore')}>
-          <Ionicons color={colors.foreground} name="search-outline" size={25} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable accessibilityLabel="Search" accessibilityRole="button" hitSlop={8} onPress={() => router.navigate('/explore')}>
+            <Ionicons color={colors.foreground} name="search-outline" size={23} />
+          </Pressable>
+          <Pressable accessibilityLabel="Post options" accessibilityRole="button" hitSlop={8} onPress={() => setOptionsOpen(true)}>
+            <Ionicons color={colors.foreground} name="ellipsis-horizontal" size={23} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -52,7 +60,8 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
             <Text style={styles.topic}>{post.topic}</Text>
           </View>
           <Text style={styles.title}>{post.title}</Text>
-          <View style={styles.stage}><PostStage post={post} /></View>
+          <View style={styles.stage}><PostStage onComplete={(outcome) => void recordCompletion(post, outcome).then(() => setCompletionSaved(true))} post={post} /></View>
+          {completionSaved ? <Text style={styles.savedConfirmation}>Result saved to your Profile</Text> : null}
         </View>
       </View>
 
@@ -92,6 +101,7 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
         <EngagementRail onOpenComments={() => setCommentsOpen(true)} post={post} />
       </View>
       <CommentsModal onClose={() => setCommentsOpen(false)} post={post} visible={commentsOpen} />
+      <PostOptionsModal onClose={() => setOptionsOpen(false)} post={post} visible={optionsOpen} />
     </View>
   );
 }
@@ -123,9 +133,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, position: 'absolute', top: 0, width: '100%', zIndex: 2,
   },
   brand: { color: colors.foreground, fontSize: 17, fontWeight: '900', letterSpacing: -0.4, width: 78 },
+  headerActions: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, justifyContent: 'flex-end', width: 78 },
   feedTitleWrap: { alignItems: 'center' },
   feedTitle: { color: colors.foreground, fontSize: 14, fontWeight: '900' },
   feedHint: { color: colors.muted, fontSize: 9, fontWeight: '700', marginTop: 2, textTransform: 'uppercase' },
+  savedConfirmation: { color: '#C8FF64', fontSize: 11, fontWeight: '800', marginTop: spacing.sm },
   content: {
     alignItems: 'center', flex: 1, justifyContent: 'center', paddingBottom: 230,
     paddingHorizontal: spacing.lg, paddingTop: 90, pointerEvents: 'box-none',

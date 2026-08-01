@@ -2,6 +2,8 @@ import type { FeedPost } from '@/src/features/feed/types';
 
 export type RankingFormat = FeedPost['kind'];
 
+export type ReportReason = 'spam' | 'harassment' | 'hate' | 'sexual-content' | 'violence' | 'copyright' | 'other';
+
 export type CreateRankingInput = {
   format: RankingFormat;
   title: string;
