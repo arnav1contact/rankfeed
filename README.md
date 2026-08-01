@@ -9,7 +9,7 @@ A mobile-first social app for creating, discovering, and playing interactive ran
 - Search and category filtering in Explore
 - Home activity and session-aware Profile views
 
-Creator video space is deliberately reserved behind the ranking overlays for a future media integration. Newly created rankings currently persist for the active app session only.
+Creator video space is deliberately reserved behind the ranking overlays for a future media integration. Created rankings, likes, saves, follows, and comments persist locally across app restarts.
 
 ## Mock data
 

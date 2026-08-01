@@ -6,9 +6,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { APP_CONFIG } from '@/src/config/app';
+import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 import type { FeedPost as FeedPostModel } from '../types';
 import { EngagementRail } from './engagement-rail';
+import { CommentsModal } from './comments-modal';
 import { PostStage } from './post-stage';
 
 type FeedPostProps = { post: FeedPostModel; viewportHeight: number };
@@ -17,7 +19,9 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
-  const [following, setFollowing] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const { followedCreatorIds, toggleFollow } = useRankingStore();
+  const following = followedCreatorIds.includes(post.creator.id);
 
   return (
     <View
@@ -69,7 +73,7 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
               accessibilityLabel={`Follow ${post.creator.displayName}`}
               accessibilityRole="button"
               accessibilityState={{ selected: following }}
-              onPress={() => setFollowing((current) => !current)}
+              onPress={() => toggleFollow(post.creator.id)}
               style={({ pressed }) => [styles.followButton, pressed && styles.buttonPressed]}>
               <Text style={styles.followText}>{following ? 'Following' : 'Follow'}</Text>
             </Pressable>
@@ -88,8 +92,9 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
             <Ionicons color="#17151A" name="arrow-forward" size={18} />
           </Pressable>
         </View>
-        <EngagementRail accentColor={post.visual.accentColor} engagement={post.engagement} />
+        <EngagementRail onOpenComments={() => setCommentsOpen(true)} post={post} />
       </View>
+      <CommentsModal onClose={() => setCommentsOpen(false)} post={post} visible={commentsOpen} />
     </View>
   );
 }

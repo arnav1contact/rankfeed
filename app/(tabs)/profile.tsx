@@ -8,8 +8,7 @@ import { colors, radii, spacing } from '@/src/theme/tokens';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { createdCount, posts } = useRankingStore();
-  const totalLikes = posts.reduce((sum, post) => sum + post.engagement.likes, 0);
+  const { createdPosts, followedCreatorIds, isReady, savedPosts, storageError } = useRankingStore();
 
   return (
     <ScreenShell eyebrow="Your corner" title="Profile">
@@ -19,15 +18,17 @@ export default function ProfileScreen() {
           <Text style={styles.name}>Your Rankings</Text>
           <Text style={styles.handle}>@yourrankings</Text>
         </View>
-        <Pressable accessibilityLabel="Profile settings" style={styles.settings}><Ionicons color={colors.foreground} name="settings-outline" size={20} /></Pressable>
+        <View accessibilityLabel={isReady ? 'Local data loaded' : 'Loading local data'} style={styles.settings}>
+          <Ionicons color={storageError ? '#FF879A' : '#C8FF64'} name={storageError ? 'cloud-offline-outline' : isReady ? 'cloud-done-outline' : 'cloud-outline'} size={20} />
+        </View>
       </View>
 
       <View style={styles.stats}>
-        <View style={styles.stat}><Text style={styles.statValue}>{createdCount}</Text><Text style={styles.statLabel}>Published</Text></View>
+        <View style={styles.stat}><Text style={styles.statValue}>{createdPosts.length}</Text><Text style={styles.statLabel}>Published</Text></View>
         <View style={styles.divider} />
-        <View style={styles.stat}><Text style={styles.statValue}>{posts.length}</Text><Text style={styles.statLabel}>Following</Text></View>
+        <View style={styles.stat}><Text style={styles.statValue}>{followedCreatorIds.length}</Text><Text style={styles.statLabel}>Following</Text></View>
         <View style={styles.divider} />
-        <View style={styles.stat}><Text style={styles.statValue}>{totalLikes >= 1000 ? `${Math.round(totalLikes / 100) / 10}K` : totalLikes}</Text><Text style={styles.statLabel}>Feed likes</Text></View>
+        <View style={styles.stat}><Text style={styles.statValue}>{savedPosts.length}</Text><Text style={styles.statLabel}>Saved</Text></View>
       </View>
 
       <Text style={styles.sectionTitle}>Your studio</Text>
@@ -42,9 +43,29 @@ export default function ProfileScreen() {
         <Ionicons color="#777A84" name="chevron-forward" size={19} />
       </Pressable>
 
+      <View style={styles.savedHeader}>
+        <Text style={styles.sectionTitle}>Saved rankings</Text>
+        <Text style={styles.savedCount}>{savedPosts.length}</Text>
+      </View>
+      {savedPosts.length === 0 ? (
+        <View style={styles.savedEmpty}>
+          <Ionicons color="#6F727C" name="bookmark-outline" size={26} />
+          <Text style={styles.savedEmptyText}>Rankings you save will appear here.</Text>
+        </View>
+      ) : savedPosts.slice(0, 5).map((post) => (
+        <Pressable key={post.id} onPress={() => router.navigate('/rankings')} style={({ pressed }) => [styles.savedRow, pressed && styles.pressed]}>
+          <View style={[styles.savedAccent, { backgroundColor: post.visual.accentColor }]} />
+          <View style={styles.actionCopy}>
+            <Text numberOfLines={1} style={styles.actionTitle}>{post.title}</Text>
+            <Text style={styles.actionText}>{post.creator.displayName} · {post.topic}</Text>
+          </View>
+          <Ionicons color="#777A84" name="chevron-forward" size={18} />
+        </Pressable>
+      ))}
+
       <View style={styles.note}>
-        <Ionicons color="#9EA1AA" name="cloud-offline-outline" size={19} />
-        <Text style={styles.noteText}>This prototype stores new rankings for the current session. Account sync is the next backend milestone.</Text>
+        <Ionicons color={storageError ? '#FF879A' : '#9EA1AA'} name={storageError ? 'warning-outline' : 'phone-portrait-outline'} size={19} />
+        <Text style={styles.noteText}>{storageError ?? 'Rankings, likes, saves, follows, and comments are stored on this device. Account sync is the next backend milestone.'}</Text>
       </View>
     </ScreenShell>
   );
@@ -67,6 +88,12 @@ const styles = StyleSheet.create({
   statLabel: { color: '#8F929C', fontSize: 11, marginTop: 3 },
   divider: { backgroundColor: '#2E313A', height: 28, width: 1 },
   sectionTitle: { color: colors.foreground, fontSize: 18, fontWeight: '900', marginBottom: spacing.md, marginTop: 30 },
+  savedHeader: { alignItems: 'baseline', flexDirection: 'row', gap: spacing.sm },
+  savedCount: { color: '#858893', fontSize: 12, fontWeight: '800' },
+  savedEmpty: { alignItems: 'center', backgroundColor: '#12141A', borderRadius: radii.md, gap: spacing.sm, padding: spacing.xl },
+  savedEmptyText: { color: '#8F929C', fontSize: 13 },
+  savedRow: { alignItems: 'center', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 64, paddingVertical: spacing.sm },
+  savedAccent: { borderRadius: radii.pill, height: 38, width: 5 },
   action: {
     alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1,
     flexDirection: 'row', gap: spacing.md, minHeight: 76, paddingHorizontal: spacing.sm,

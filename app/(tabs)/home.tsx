@@ -8,7 +8,9 @@ import { colors, radii, spacing } from '@/src/theme/tokens';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { posts } = useRankingStore();
+  const { followedCreatorIds, posts } = useRankingStore();
+  const followedPosts = posts.filter((post) => followedCreatorIds.includes(post.creator.id));
+  const activityPosts = followedPosts.length > 0 ? followedPosts : posts;
 
   return (
     <ScreenShell eyebrow="Good to see you" title="What’s ranking">
@@ -22,10 +24,10 @@ export default function HomeScreen() {
       </Pressable>
 
       <View style={styles.sectionRow}>
-        <Text style={styles.sectionTitle}>From creators you follow</Text>
+        <Text style={styles.sectionTitle}>{followedPosts.length > 0 ? 'From creators you follow' : 'Creators to discover'}</Text>
         <Pressable onPress={() => router.navigate('/rankings')}><Text style={styles.link}>See all</Text></Pressable>
       </View>
-      {posts.slice(0, 3).map((post) => (
+      {activityPosts.slice(0, 3).map((post) => (
         <Pressable key={post.id} onPress={() => router.navigate('/rankings')} style={({ pressed }) => [styles.activity, pressed && styles.pressed]}>
           <View style={[styles.avatar, { borderColor: post.visual.accentColor }]}><Text style={styles.avatarText}>{post.creator.avatarLabel}</Text></View>
           <View style={styles.activityCopy}>
