@@ -14,6 +14,8 @@ Use `.env.example` to configure the Expo client. Never place a service-role or s
 
 Before linking a hosted project, confirm the Supabase organization, owner, billing plan, deployment region, and separate development/staging/production project names.
 
+The activity inbox depends on the notification triggers in `20260801120000_activity_notifications.sql`; apply migrations before testing signed-in activity.
+
 ## Social authentication
 
 Google and Apple sign-in use Supabase OAuth with Expo's system authentication session. Before testing them in a hosted project:

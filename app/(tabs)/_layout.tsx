@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
 
+import { useActivity } from '@/src/features/activity/activity-provider';
 import { colors } from '@/src/theme/tokens';
 
 type TabIconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -19,6 +20,7 @@ function CreateIcon() {
 }
 
 export default function TabLayout() {
+  const { unreadCount } = useActivity();
   return (
     <Tabs
       initialRouteName="rankings"
@@ -35,6 +37,8 @@ export default function TabLayout() {
         name="home"
         options={{
           title: 'Home',
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+          tabBarBadgeStyle: styles.badge,
           tabBarAccessibilityLabel: 'Home tab',
           tabBarIcon: ({ color, focused }) => <TabIcon color={color} focused={focused} name="home" />,
         }}
@@ -77,6 +81,7 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  badge: { backgroundColor: '#C8FF64', color: '#111318', fontSize: 9, fontWeight: '900' },
   scene: { backgroundColor: colors.background },
   tabBar: {
     backgroundColor: 'rgba(8, 9, 12, 0.96)',
