@@ -121,6 +121,16 @@ async function getPost(postId: string) {
   return mapFeedRow(data as unknown as FeedRow);
 }
 
+function parseFeedCursor(cursor: string) {
+  try {
+    const parsed = JSON.parse(cursor) as { id?: string; publishedAt?: string };
+    if (parsed.id && parsed.publishedAt) return { id: parsed.id, publishedAt: parsed.publishedAt };
+  } catch {
+    // Older timestamp-only cursors remain readable during rollout.
+  }
+  return { id: undefined, publishedAt: cursor };
+}
+
 export const supabaseFeedRepository = {
   async getFeed(query: FeedQuery): Promise<CursorPage<FeedPost>> {
     const client = getSupabaseClient();
@@ -137,15 +147,23 @@ export const supabaseFeedRepository = {
       .select('id, template_id, creator_id, format, title, topic, caption, published_at, profiles!posts_creator_id_fkey(id, handle, display_name), post_items(label, source_position, result_position), likes(count), comments(count)')
       .eq('status', 'published')
       .order('published_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(query.limit);
-    if (query.cursor) request = request.lt('published_at', query.cursor);
+    if (query.cursor) {
+      const cursor = parseFeedCursor(query.cursor);
+      request = cursor.id
+        ? request.or(`published_at.lt.${cursor.publishedAt},and(published_at.eq.${cursor.publishedAt},id.lt.${cursor.id})`)
+        : request.lt('published_at', cursor.publishedAt);
+    }
     if (creatorIds) request = request.in('creator_id', creatorIds);
     const { data, error } = await request;
     if (error) throw error;
     const rows = (data ?? []) as unknown as FeedRow[];
     return {
       items: rows.map(mapFeedRow),
-      nextCursor: rows.length === query.limit ? rows.at(-1)?.published_at : undefined,
+      nextCursor: rows.length === query.limit && rows.at(-1)
+        ? JSON.stringify({ id: rows.at(-1)?.id, publishedAt: rows.at(-1)?.published_at })
+        : undefined,
     };
   },
   getPost,

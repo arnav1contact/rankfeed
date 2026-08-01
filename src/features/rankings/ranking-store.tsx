@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 
 import { isRemoteId, supabaseFeedRepository, supabaseRankingRepository, supabaseSocialRepository } from '@/src/data/supabase-ranking-repositories';
 import { supabaseModerationRepository } from '@/src/data/supabase-moderation-repository';
@@ -44,6 +44,9 @@ type RankingStoreValue = {
   storageError?: string;
   syncError?: string;
   syncStatus: SyncStatus;
+  hasMoreFeed: boolean;
+  isLoadingMore: boolean;
+  loadMoreFeed: () => Promise<void>;
   publishRanking: (input: CreateRankingInput) => Promise<FeedPost>;
   publishCompletedPlay: (playId: string) => Promise<FeedPost>;
   recordCompletion: (post: FeedPost, outcome: RankingOutcome) => Promise<CompletedPlay>;
@@ -63,6 +66,7 @@ type RankingStoreValue = {
 };
 
 const STORAGE_KEY = '@rankfeed/app-state/v1';
+const FEED_PAGE_SIZE = 20;
 const RankingStoreContext = createContext<RankingStoreValue | null>(null);
 
 const profileCreator = {
@@ -82,6 +86,11 @@ function toggleId(current: readonly string[], id: string) {
 
 function mergeIds(localIds: readonly string[], remoteIds: readonly string[]) {
   return [...new Set([...localIds.filter((id) => !isRemoteId(id)), ...remoteIds])];
+}
+
+function appendUniquePosts(current: readonly FeedPost[], incoming: readonly FeedPost[]) {
+  const currentIds = new Set(current.map((post) => post.id));
+  return [...current, ...incoming.filter((post) => !currentIds.has(post.id))];
 }
 
 function errorMessage(error: unknown) {
@@ -155,6 +164,10 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   const [storageError, setStorageError] = useState<string>();
   const [syncError, setSyncError] = useState<string>();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local');
+  const [feedCursor, setFeedCursor] = useState<string>();
+  const [hasMoreFeed, setHasMoreFeed] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -201,6 +214,10 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     if (!isReady) return;
     if (!isConfigured || !user) {
       setFeedPosts([...mockFeedPosts]);
+      setFeedCursor(undefined);
+      setHasMoreFeed(false);
+      setIsLoadingMore(false);
+      loadingMoreRef.current = false;
       setCreatedPosts((current) => current.filter((post) => !isRemoteId(post.id)));
       setLikedPostIds((current) => current.filter((id) => !isRemoteId(id)));
       setSavedPostIds((current) => current.filter((id) => !isRemoteId(id)));
@@ -216,7 +233,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     let active = true;
     setSyncStatus('syncing');
     Promise.all([
-      supabaseFeedRepository.getFeed({ limit: 50, mode: 'for-you' }),
+      supabaseFeedRepository.getFeed({ limit: FEED_PAGE_SIZE, mode: 'for-you' }),
       supabaseSocialRepository.getSnapshot(user.id),
       supabaseRankingRepository.listCompletedSessions(user.id),
       supabaseModerationRepository.getSnapshot(user.id),
@@ -229,6 +246,8 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       const communityPosts = remotePosts.filter((post) => post.creator.id !== user.id);
       setCreatedPosts((current) => [...ownPosts, ...current.filter((post) => !isRemoteId(post.id))]);
       setFeedPosts(communityPosts.length > 0 || ownPosts.length > 0 ? communityPosts : [...mockFeedPosts]);
+      setFeedCursor(feed.nextCursor);
+      setHasMoreFeed(Boolean(feed.nextCursor));
       setLikedPostIds((current) => mergeIds(current, social.likedPostIds));
       setSavedPostIds((current) => mergeIds(current, social.savedPostIds));
       setFollowedCreatorIds((current) => mergeIds(current, social.followedCreatorIds));
@@ -255,6 +274,30 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   }), [allPosts, blockedCreatorIds]);
   const visibleDrafts = useMemo(() => drafts.filter((draft) => !draft.ownerId || draft.ownerId === user?.id), [drafts, user?.id]);
   const savedPosts = useMemo(() => posts.filter((post) => savedPostIds.includes(post.id)), [posts, savedPostIds]);
+  const loadMoreFeed = useCallback(async () => {
+    if (!user || !feedCursor || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    try {
+      const page = await supabaseFeedRepository.getFeed({ cursor: feedCursor, limit: FEED_PAGE_SIZE, mode: 'for-you' });
+      const remotePosts = page.items.map((post) => likedPostIds.includes(post.id)
+        ? { ...post, engagement: { ...post.engagement, likes: Math.max(0, post.engagement.likes - 1) } }
+        : post);
+      const ownPosts = remotePosts.filter((post) => post.creator.id === user.id);
+      const communityPosts = remotePosts.filter((post) => post.creator.id !== user.id);
+      setCreatedPosts((current) => appendUniquePosts(current, ownPosts));
+      setFeedPosts((current) => appendUniquePosts(current, communityPosts));
+      setFeedCursor(page.nextCursor);
+      setHasMoreFeed(Boolean(page.nextCursor));
+      setSyncError(undefined);
+    } catch (error) {
+      setSyncError(errorMessage(error));
+      setSyncStatus('error');
+    } finally {
+      loadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [feedCursor, likedPostIds, user]);
   const shuffleFeed = useCallback(() => setFeedPosts((current) => shuffleItems(current)), []);
   const toggleLike = useCallback((postId: string) => {
     const wasLiked = likedPostIds.includes(postId);
@@ -420,8 +463,10 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     setSyncStatus('syncing');
     try {
       await supabaseProfileRepository.unblock(creatorId);
-      const feed = await supabaseFeedRepository.getFeed({ limit: 50, mode: 'for-you' });
+      const feed = await supabaseFeedRepository.getFeed({ limit: FEED_PAGE_SIZE, mode: 'for-you' });
       setFeedPosts(feed.items.filter((post) => post.creator.id !== user.id));
+      setFeedCursor(feed.nextCursor);
+      setHasMoreFeed(Boolean(feed.nextCursor));
       setSyncError(undefined);
       setSyncStatus('synced');
     } catch (error) {
@@ -509,6 +554,9 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     storageError,
     syncError,
     syncStatus,
+    hasMoreFeed,
+    isLoadingMore,
+    loadMoreFeed,
     shuffleFeed,
     toggleLike,
     toggleSave,
@@ -525,7 +573,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     reportPost,
     deletePost,
     deleteComment,
-  }), [addComment, blockCreator, blockedCreatorIds, blockedCreators, commentsByPost, completedPlays, createdPosts, deleteComment, deleteDraft, deletePost, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishCompletedPlay, publishRanking, recordCompletion, reportPost, reportedPostIds, saveDraft, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, unblockCreator, visibleDrafts]);
+  }), [addComment, blockCreator, blockedCreatorIds, blockedCreators, commentsByPost, completedPlays, createdPosts, deleteComment, deleteDraft, deletePost, followedCreatorIds, hasMoreFeed, isLoadingMore, isReady, likedPostIds, loadComments, loadMoreFeed, posts, publishCompletedPlay, publishRanking, recordCompletion, reportPost, reportedPostIds, saveDraft, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, unblockCreator, visibleDrafts]);
 
   return <RankingStoreContext.Provider value={value}>{children}</RankingStoreContext.Provider>;
 }
