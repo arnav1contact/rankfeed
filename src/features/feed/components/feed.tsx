@@ -16,13 +16,16 @@ import { FeedPost } from './feed-post';
 
 type FeedProps = {
   posts: readonly FeedPostModel[];
+  emptyMessage?: string;
+  emptyTitle?: string;
   hasMore?: boolean;
+  isInitialLoading?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
   showEndState?: boolean;
 };
 
-export function Feed({ hasMore = false, isLoadingMore = false, onLoadMore, posts, showEndState = false }: FeedProps) {
+export function Feed({ emptyMessage, emptyTitle, hasMore = false, isInitialLoading = false, isLoadingMore = false, onLoadMore, posts, showEndState = false }: FeedProps) {
   const window = useWindowDimensions();
   const [viewportHeight, setViewportHeight] = useState(window.height);
 
@@ -45,6 +48,13 @@ export function Feed({ hasMore = false, isLoadingMore = false, onLoadMore, posts
         getItemLayout={(_, index) => ({ index, length: viewportHeight, offset: viewportHeight * index })}
         initialNumToRender={2}
         keyExtractor={(item) => item.id}
+        ListEmptyComponent={(
+          <View style={[styles.empty, { height: viewportHeight }]}>
+            {isInitialLoading ? <ActivityIndicator color={colors.foreground} size="large" /> : null}
+            <Text style={styles.emptyTitle}>{isInitialLoading ? 'Loading your feed…' : emptyTitle ?? 'No rankings yet'}</Text>
+            {!isInitialLoading && emptyMessage ? <Text style={styles.emptyMessage}>{emptyMessage}</Text> : null}
+          </View>
+        )}
         maxToRenderPerBatch={2}
         onEndReached={() => {
           if (hasMore && !isLoadingMore) onLoadMore?.();
@@ -73,6 +83,9 @@ export function Feed({ hasMore = false, isLoadingMore = false, onLoadMore, posts
 
 const styles = StyleSheet.create({
   container: { backgroundColor: colors.background, flex: 1 },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
+  emptyMessage: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 8, maxWidth: 300, textAlign: 'center' },
+  emptyTitle: { color: colors.foreground, fontSize: 20, fontWeight: '900', marginTop: 14, textAlign: 'center' },
   footer: { alignItems: 'center', flexDirection: 'row', gap: 10, height: 64, justifyContent: 'center' },
   footerText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
 });

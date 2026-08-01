@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { isRemoteId, supabaseFeedRepository, supabaseRankingRepository, supabaseSocialRepository } from '@/src/data/supabase-ranking-repositories';
 import { supabaseModerationRepository } from '@/src/data/supabase-moderation-repository';
 import { supabaseProfileRepository } from '@/src/data/supabase-profile-repository';
+import type { FeedQuery } from '@/src/data/repositories';
 import { useAuth } from '@/src/features/auth/auth-provider';
 import type { Creator, FeedPost } from '@/src/features/feed/types';
 import { mockFeedPosts } from '@/src/mock-data';
@@ -13,6 +14,7 @@ import type { CompletedPlay, CreateRankingInput, LocalComment, RankingDraft, Ran
 export type { CreateRankingInput, LocalComment, RankingDraft, RankingFormat } from './types';
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error';
+export type FeedMode = FeedQuery['mode'];
 
 type PersistedRankingState = {
   version: 4;
@@ -29,6 +31,7 @@ type PersistedRankingState = {
 
 type RankingStoreValue = {
   posts: readonly FeedPost[];
+  rankingPosts: readonly FeedPost[];
   createdPosts: readonly FeedPost[];
   completedPlays: readonly CompletedPlay[];
   drafts: readonly RankingDraft[];
@@ -44,9 +47,12 @@ type RankingStoreValue = {
   storageError?: string;
   syncError?: string;
   syncStatus: SyncStatus;
+  feedMode: FeedMode;
   hasMoreFeed: boolean;
   isLoadingMore: boolean;
+  isSwitchingFeed: boolean;
   loadMoreFeed: () => Promise<void>;
+  selectFeedMode: (mode: FeedMode) => Promise<void>;
   publishRanking: (input: CreateRankingInput) => Promise<FeedPost>;
   publishCompletedPlay: (playId: string) => Promise<FeedPost>;
   recordCompletion: (post: FeedPost, outcome: RankingOutcome) => Promise<CompletedPlay>;
@@ -91,6 +97,10 @@ function mergeIds(localIds: readonly string[], remoteIds: readonly string[]) {
 function appendUniquePosts(current: readonly FeedPost[], incoming: readonly FeedPost[]) {
   const currentIds = new Set(current.map((post) => post.id));
   return [...current, ...incoming.filter((post) => !currentIds.has(post.id))];
+}
+
+function uniquePosts(posts: readonly FeedPost[]) {
+  return appendUniquePosts([], posts);
 }
 
 function errorMessage(error: unknown) {
@@ -151,6 +161,7 @@ function readPersistedState(value: string | null): PersistedRankingState | null 
 export function RankingStoreProvider({ children }: PropsWithChildren) {
   const { isConfigured, user } = useAuth();
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => [...mockFeedPosts]);
+  const [followingFeedPosts, setFollowingFeedPosts] = useState<FeedPost[]>([]);
   const [createdPosts, setCreatedPosts] = useState<FeedPost[]>([]);
   const [completedPlays, setCompletedPlays] = useState<CompletedPlay[]>([]);
   const [drafts, setDrafts] = useState<RankingDraft[]>([]);
@@ -165,9 +176,13 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   const [syncError, setSyncError] = useState<string>();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local');
   const [feedCursor, setFeedCursor] = useState<string>();
-  const [hasMoreFeed, setHasMoreFeed] = useState(false);
+  const [followingFeedCursor, setFollowingFeedCursor] = useState<string>();
+  const [feedMode, setFeedMode] = useState<FeedMode>('for-you');
+  const [hasLoadedFollowingFeed, setHasLoadedFollowingFeed] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isSwitchingFeed, setIsSwitchingFeed] = useState(false);
   const loadingMoreRef = useRef(false);
+  const loadingFollowingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -214,10 +229,15 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     if (!isReady) return;
     if (!isConfigured || !user) {
       setFeedPosts([...mockFeedPosts]);
+      setFollowingFeedPosts([]);
       setFeedCursor(undefined);
-      setHasMoreFeed(false);
+      setFollowingFeedCursor(undefined);
+      setFeedMode('for-you');
+      setHasLoadedFollowingFeed(false);
       setIsLoadingMore(false);
+      setIsSwitchingFeed(false);
       loadingMoreRef.current = false;
+      loadingFollowingRef.current = false;
       setCreatedPosts((current) => current.filter((post) => !isRemoteId(post.id)));
       setLikedPostIds((current) => current.filter((id) => !isRemoteId(id)));
       setSavedPostIds((current) => current.filter((id) => !isRemoteId(id)));
@@ -247,7 +267,10 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       setCreatedPosts((current) => [...ownPosts, ...current.filter((post) => !isRemoteId(post.id))]);
       setFeedPosts(communityPosts.length > 0 || ownPosts.length > 0 ? communityPosts : [...mockFeedPosts]);
       setFeedCursor(feed.nextCursor);
-      setHasMoreFeed(Boolean(feed.nextCursor));
+      setFollowingFeedPosts([]);
+      setFollowingFeedCursor(undefined);
+      setFeedMode('for-you');
+      setHasLoadedFollowingFeed(false);
       setLikedPostIds((current) => mergeIds(current, social.likedPostIds));
       setSavedPostIds((current) => mergeIds(current, social.savedPostIds));
       setFollowedCreatorIds((current) => mergeIds(current, social.followedCreatorIds));
@@ -264,8 +287,14 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     return () => { active = false; };
   }, [isConfigured, isReady, user]);
 
-  const allPosts = useMemo(() => [...createdPosts, ...feedPosts], [createdPosts, feedPosts]);
+  const allPosts = useMemo(() => uniquePosts([...createdPosts, ...feedPosts, ...followingFeedPosts]), [createdPosts, feedPosts, followingFeedPosts]);
   const posts = useMemo(() => allPosts.filter((post) => !blockedCreatorIds.includes(post.creator.id)), [allPosts, blockedCreatorIds]);
+  const rankingPosts = useMemo(() => {
+    const activePosts = feedMode === 'following'
+      ? (user ? followingFeedPosts : feedPosts.filter((post) => followedCreatorIds.includes(post.creator.id)))
+      : [...createdPosts, ...feedPosts];
+    return uniquePosts(activePosts).filter((post) => !blockedCreatorIds.includes(post.creator.id));
+  }, [blockedCreatorIds, createdPosts, feedMode, feedPosts, followedCreatorIds, followingFeedPosts, user]);
   const blockedCreators = useMemo(() => blockedCreatorIds.map((creatorId) => allPosts.find((post) => post.creator.id === creatorId)?.creator ?? {
     id: creatorId,
     displayName: 'Blocked creator',
@@ -274,21 +303,49 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   }), [allPosts, blockedCreatorIds]);
   const visibleDrafts = useMemo(() => drafts.filter((draft) => !draft.ownerId || draft.ownerId === user?.id), [drafts, user?.id]);
   const savedPosts = useMemo(() => posts.filter((post) => savedPostIds.includes(post.id)), [posts, savedPostIds]);
+  const hasMoreFeed = Boolean(feedMode === 'following' ? followingFeedCursor : feedCursor);
+  const selectFeedMode = useCallback(async (mode: FeedMode) => {
+    setFeedMode(mode);
+    if (mode === 'for-you' || !user || hasLoadedFollowingFeed || loadingFollowingRef.current) return;
+    loadingFollowingRef.current = true;
+    setIsSwitchingFeed(true);
+    try {
+      const page = await supabaseFeedRepository.getFeed({ limit: FEED_PAGE_SIZE, mode: 'following' });
+      const remotePosts = page.items.map((post) => likedPostIds.includes(post.id)
+        ? { ...post, engagement: { ...post.engagement, likes: Math.max(0, post.engagement.likes - 1) } }
+        : post);
+      setFollowingFeedPosts(remotePosts.filter((post) => post.creator.id !== user.id));
+      setFollowingFeedCursor(page.nextCursor);
+      setHasLoadedFollowingFeed(true);
+      setSyncError(undefined);
+    } catch (error) {
+      setSyncError(errorMessage(error));
+      setSyncStatus('error');
+    } finally {
+      loadingFollowingRef.current = false;
+      setIsSwitchingFeed(false);
+    }
+  }, [hasLoadedFollowingFeed, likedPostIds, user]);
   const loadMoreFeed = useCallback(async () => {
-    if (!user || !feedCursor || loadingMoreRef.current) return;
+    const cursor = feedMode === 'following' ? followingFeedCursor : feedCursor;
+    if (!user || !cursor || loadingMoreRef.current) return;
     loadingMoreRef.current = true;
     setIsLoadingMore(true);
     try {
-      const page = await supabaseFeedRepository.getFeed({ cursor: feedCursor, limit: FEED_PAGE_SIZE, mode: 'for-you' });
+      const page = await supabaseFeedRepository.getFeed({ cursor, limit: FEED_PAGE_SIZE, mode: feedMode });
       const remotePosts = page.items.map((post) => likedPostIds.includes(post.id)
         ? { ...post, engagement: { ...post.engagement, likes: Math.max(0, post.engagement.likes - 1) } }
         : post);
       const ownPosts = remotePosts.filter((post) => post.creator.id === user.id);
       const communityPosts = remotePosts.filter((post) => post.creator.id !== user.id);
       setCreatedPosts((current) => appendUniquePosts(current, ownPosts));
-      setFeedPosts((current) => appendUniquePosts(current, communityPosts));
-      setFeedCursor(page.nextCursor);
-      setHasMoreFeed(Boolean(page.nextCursor));
+      if (feedMode === 'following') {
+        setFollowingFeedPosts((current) => appendUniquePosts(current, communityPosts));
+        setFollowingFeedCursor(page.nextCursor);
+      } else {
+        setFeedPosts((current) => appendUniquePosts(current, communityPosts));
+        setFeedCursor(page.nextCursor);
+      }
       setSyncError(undefined);
     } catch (error) {
       setSyncError(errorMessage(error));
@@ -297,8 +354,11 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [feedCursor, likedPostIds, user]);
-  const shuffleFeed = useCallback(() => setFeedPosts((current) => shuffleItems(current)), []);
+  }, [feedCursor, feedMode, followingFeedCursor, likedPostIds, user]);
+  const shuffleFeed = useCallback(() => {
+    if (feedMode === 'following' && user) setFollowingFeedPosts((current) => shuffleItems(current));
+    else setFeedPosts((current) => shuffleItems(current));
+  }, [feedMode, user]);
   const toggleLike = useCallback((postId: string) => {
     const wasLiked = likedPostIds.includes(postId);
     setLikedPostIds((current) => toggleId(current, postId));
@@ -329,7 +389,12 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     if (!user || !isRemoteId(creatorId) || creatorId === user.id) return;
     setSyncStatus('syncing');
     const request = wasFollowing ? supabaseSocialRepository.unfollow(user.id, creatorId) : supabaseSocialRepository.follow(user.id, creatorId);
-    void request.then(() => { setSyncError(undefined); setSyncStatus('synced'); }).catch((error: unknown) => {
+    void request.then(() => {
+      if (wasFollowing) setFollowingFeedPosts((current) => current.filter((post) => post.creator.id !== creatorId));
+      else setHasLoadedFollowingFeed(false);
+      setSyncError(undefined);
+      setSyncStatus('synced');
+    }).catch((error: unknown) => {
       setFollowedCreatorIds((current) => toggleId(current, creatorId));
       setSyncError(errorMessage(error));
       setSyncStatus('error');
@@ -466,7 +531,9 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       const feed = await supabaseFeedRepository.getFeed({ limit: FEED_PAGE_SIZE, mode: 'for-you' });
       setFeedPosts(feed.items.filter((post) => post.creator.id !== user.id));
       setFeedCursor(feed.nextCursor);
-      setHasMoreFeed(Boolean(feed.nextCursor));
+      setFollowingFeedPosts([]);
+      setFollowingFeedCursor(undefined);
+      setHasLoadedFollowingFeed(false);
       setSyncError(undefined);
       setSyncStatus('synced');
     } catch (error) {
@@ -539,6 +606,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<RankingStoreValue>(() => ({
     posts,
+    rankingPosts,
     createdPosts,
     completedPlays,
     drafts: visibleDrafts,
@@ -554,9 +622,12 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     storageError,
     syncError,
     syncStatus,
+    feedMode,
     hasMoreFeed,
     isLoadingMore,
+    isSwitchingFeed,
     loadMoreFeed,
+    selectFeedMode,
     shuffleFeed,
     toggleLike,
     toggleSave,
@@ -573,7 +644,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     reportPost,
     deletePost,
     deleteComment,
-  }), [addComment, blockCreator, blockedCreatorIds, blockedCreators, commentsByPost, completedPlays, createdPosts, deleteComment, deleteDraft, deletePost, followedCreatorIds, hasMoreFeed, isLoadingMore, isReady, likedPostIds, loadComments, loadMoreFeed, posts, publishCompletedPlay, publishRanking, recordCompletion, reportPost, reportedPostIds, saveDraft, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, unblockCreator, visibleDrafts]);
+  }), [addComment, blockCreator, blockedCreatorIds, blockedCreators, commentsByPost, completedPlays, createdPosts, deleteComment, deleteDraft, deletePost, feedMode, followedCreatorIds, hasMoreFeed, isLoadingMore, isReady, isSwitchingFeed, likedPostIds, loadComments, loadMoreFeed, posts, publishCompletedPlay, publishRanking, rankingPosts, recordCompletion, reportPost, reportedPostIds, saveDraft, savedPostIds, savedPosts, selectFeedMode, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, unblockCreator, visibleDrafts]);
 
   return <RankingStoreContext.Provider value={value}>{children}</RankingStoreContext.Provider>;
 }

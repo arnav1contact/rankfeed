@@ -5,6 +5,7 @@ A mobile-first social app for creating, discovering, and playing interactive ran
 - A five-tab Reels-style layout with Rankings as the default tab
 - Full-screen vertical paging across typed mock ranking posts
 - Stable cursor-based infinite loading for signed-in Supabase feeds
+- Separate For You and Following feeds with independent pagination
 - Interactive blind-ranking slots and bracket choices with durable result history
 - A Create flow that publishes new rankings into the live session feed
 - Automatic offline draft saving with resume and discard controls

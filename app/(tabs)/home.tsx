@@ -8,14 +8,14 @@ import { colors, radii, spacing } from '@/src/theme/tokens';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { followedCreatorIds, posts } = useRankingStore();
+  const { followedCreatorIds, posts, selectFeedMode } = useRankingStore();
   const playablePosts = posts.filter((post) => post.kind !== 'completed-result');
   const followedPosts = playablePosts.filter((post) => followedCreatorIds.includes(post.creator.id));
   const activityPosts = followedPosts.length > 0 ? followedPosts : playablePosts;
 
   return (
     <ScreenShell eyebrow="Good to see you" title="What’s ranking">
-      <Pressable onPress={() => router.navigate('/rankings')} style={({ pressed }) => [styles.hero, pressed && styles.pressed]}>
+      <Pressable onPress={() => { void selectFeedMode('for-you'); router.navigate('/rankings'); }} style={({ pressed }) => [styles.hero, pressed && styles.pressed]}>
         <View style={styles.heroIcon}><Ionicons color="#13160D" name="play" size={22} /></View>
         <View style={styles.heroCopy}>
           <Text style={styles.heroKicker}>For you · {playablePosts.length} games ready</Text>
@@ -26,7 +26,7 @@ export default function HomeScreen() {
 
       <View style={styles.sectionRow}>
         <Text style={styles.sectionTitle}>{followedPosts.length > 0 ? 'Play from creators you follow' : 'Pick a ranking to play'}</Text>
-        <Pressable onPress={() => router.navigate('/rankings')}><Text style={styles.link}>See all</Text></Pressable>
+        <Pressable onPress={() => { void selectFeedMode(followedPosts.length > 0 ? 'following' : 'for-you'); router.navigate('/rankings'); }}><Text style={styles.link}>See all</Text></Pressable>
       </View>
       {activityPosts.slice(0, 3).map((post) => (
         <Pressable key={post.id} onPress={() => router.push({ pathname: '/play/[sourceId]', params: { sourceId: post.id } })} style={({ pressed }) => [styles.activity, pressed && styles.pressed]}>

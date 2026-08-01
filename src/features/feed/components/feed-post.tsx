@@ -49,10 +49,6 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
 
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={styles.brand}>{APP_CONFIG.displayName}</Text>
-        <View style={styles.feedTitleWrap}>
-          <Text style={styles.feedTitle}>Play feed</Text>
-          <Text style={styles.feedHint}>Swipe for another</Text>
-        </View>
         <View style={styles.headerActions}>
           <Pressable accessibilityLabel="Search" accessibilityRole="button" hitSlop={8} onPress={() => router.navigate('/explore')}>
             <Ionicons color={colors.foreground} name="search-outline" size={23} />
@@ -146,13 +142,10 @@ const styles = StyleSheet.create({
   },
   brand: { color: colors.foreground, fontSize: 17, fontWeight: '900', letterSpacing: -0.4, width: 78 },
   headerActions: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, justifyContent: 'flex-end', width: 78 },
-  feedTitleWrap: { alignItems: 'center' },
-  feedTitle: { color: colors.foreground, fontSize: 14, fontWeight: '900' },
-  feedHint: { color: colors.muted, fontSize: 9, fontWeight: '700', marginTop: 2, textTransform: 'uppercase' },
   savedConfirmation: { color: '#C8FF64', fontSize: 11, fontWeight: '800', marginTop: spacing.sm },
   content: {
     alignItems: 'center', flex: 1, justifyContent: 'center', paddingBottom: 230,
-    paddingHorizontal: spacing.lg, paddingTop: 90, pointerEvents: 'box-none',
+    paddingHorizontal: spacing.lg, paddingTop: 112, pointerEvents: 'box-none',
   },
   rankingOverlay: {
     alignItems: 'center',
