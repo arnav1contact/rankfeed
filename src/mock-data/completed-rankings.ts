@@ -1,9 +1,21 @@
+import { mockCreators } from './creators';
+import { mockRankingTemplates } from './ranking-templates';
 import type { CompletedRanking } from './types';
 
-export const mockCompletedRankings = [
-  { id: 'result-pokemon-nina', creatorId: 'creator-nina', templateId: 'template-pokemon-games-01', title: 'My Pokémon game top five', topic: 'Gaming', items: [{ rank: 1, label: 'Emerald' }, { rank: 2, label: 'Platinum' }, { rank: 3, label: 'Black 2' }, { rank: 4, label: 'HeartGold' }, { rank: 5, label: 'Legends: Arceus' }] },
-  { id: 'result-breakfast-dev', creatorId: 'creator-dev', templateId: 'template-breakfast-01', title: 'Breakfast foods, ranked', topic: 'Food', items: [{ rank: 1, label: 'Breakfast burrito' }, { rank: 2, label: 'Eggs Benedict' }, { rank: 3, label: 'Bagel and lox' }, { rank: 4, label: 'Pancakes' }, { rank: 5, label: 'French toast' }] },
-  { id: 'result-movies-sofia', creatorId: 'creator-sofia', templateId: 'template-movies-01', title: 'My animated movie hall of fame', topic: 'Movies', items: [{ rank: 1, label: 'Spirited Away' }, { rank: 2, label: 'Ratatouille' }, { rank: 3, label: 'Spider-Verse' }, { rank: 4, label: 'Toy Story' }, { rank: 5, label: 'The Lion King' }] },
-  { id: 'result-albums-jordan', creatorId: 'creator-jordan', templateId: 'template-albums-01', title: 'Five albums I would keep forever', topic: 'Music', items: [{ rank: 1, label: 'Purple Rain' }, { rank: 2, label: 'Rumours' }, { rank: 3, label: 'To Pimp a Butterfly' }, { rank: 4, label: 'Thriller' }, { rank: 5, label: 'Back to Black' }] },
-  { id: 'result-cities-avery', creatorId: 'creator-avery', templateId: 'template-travel-01', title: 'My dream long weekends', topic: 'Travel', items: [{ rank: 1, label: 'Tokyo' }, { rank: 2, label: 'Mexico City' }, { rank: 3, label: 'Lisbon' }, { rank: 4, label: 'Cape Town' }, { rank: 5, label: 'Copenhagen' }] },
-] as const satisfies readonly CompletedRanking[];
+const creatorIds = Object.values(mockCreators).map((creator) => creator.id);
+const completedTemplates = mockRankingTemplates.filter((template) => template.format === 'completed-result');
+
+export const mockCompletedRankings: readonly CompletedRanking[] = completedTemplates.flatMap((template, templateIndex) =>
+  [0, 1].map((variant) => {
+    const offset = variant * 5;
+    const selectedItems = template.items.slice(offset, offset + 5);
+    return {
+      id: `result-${template.id.replace('template-', '')}-${variant + 1}`,
+      creatorId: creatorIds[(templateIndex * 2 + variant) % creatorIds.length],
+      templateId: template.id,
+      title: template.title,
+      topic: template.topic,
+      items: selectedItems.map((label, index) => ({ label, rank: index + 1 })),
+    };
+  }),
+);

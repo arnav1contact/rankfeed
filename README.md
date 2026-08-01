@@ -16,11 +16,14 @@ Creator video space is deliberately reserved behind the ranking overlays for a f
 All display fixtures live in `src/mock-data/` and are separated by purpose:
 
 - `creators.ts` — reusable creator profiles
-- `ranking-templates.ts` — playable blind-ranking, bracket, and top-list templates
-- `completed-rankings.ts` — published creator results
+- `item-pools.ts` — 15–18 candidates per topic for randomized draws
+- `ranking-templates.ts` — 24 playable blind-ranking, bracket, and top-list templates
+- `completed-rankings.ts` — 16 published creator results
 - `feed-posts.ts` — the mixed social feed assembled from those records
 
 `index.ts` is the public entry point for app features that consume mock data.
+
+The mock catalog currently generates 48 feed posts and 16 completed results across 12 creators. Blind rankings sample five random candidates from their larger pools on each play, brackets sample a fresh tournament field, and the feed reshuffles whenever Rankings regains focus.
 
 ## Requirements
 

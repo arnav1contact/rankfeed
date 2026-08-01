@@ -8,7 +8,7 @@ import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { mockRankingTemplates } from '@/src/mock-data';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 
-const categories = ['All', 'Food', 'Gaming', 'Music', 'Travel', 'TV', 'Movies', 'Mythology'] as const;
+const categories = ['All', 'Food', 'Gaming', 'Games', 'Music', 'Travel', 'TV', 'Movies', 'Culture', 'Mythology', 'Nature', 'Style'] as const;
 
 export default function ExploreScreen() {
   const router = useRouter();

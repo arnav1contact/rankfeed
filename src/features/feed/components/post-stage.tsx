@@ -1,16 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radii, spacing } from '@/src/theme/tokens';
+import { sampleItems } from '@/src/features/rankings/random';
 import type { FeedPost } from '../types';
 
 type PostStageProps = { post: FeedPost };
 
 function BlindRankingStage({ post }: { post: Extract<FeedPost, { kind: 'blind-ranking' }> }) {
+  const [draw, setDraw] = useState(() => post.items.slice(0, post.slotCount));
   const [itemIndex, setItemIndex] = useState(0);
   const [slots, setSlots] = useState<(string | null)[]>(() => Array.from({ length: post.slotCount }, () => null));
-  const currentItem = post.items[itemIndex];
-  const complete = itemIndex >= post.items.length;
+  const currentItem = draw[itemIndex];
+  const complete = itemIndex >= draw.length;
+
+  useEffect(() => {
+    setDraw(sampleItems(post.items, Math.min(post.slotCount, post.items.length)));
+    setItemIndex(0);
+    setSlots(Array.from({ length: post.slotCount }, () => null));
+  }, [post]);
 
   const placeItem = (slotIndex: number) => {
     if (complete || slots[slotIndex] || !currentItem) return;
@@ -19,6 +27,7 @@ function BlindRankingStage({ post }: { post: Extract<FeedPost, { kind: 'blind-ra
   };
 
   const reset = () => {
+    setDraw(sampleItems(post.items, Math.min(post.slotCount, post.items.length)));
     setItemIndex(0);
     setSlots(Array.from({ length: post.slotCount }, () => null));
   };
@@ -26,7 +35,7 @@ function BlindRankingStage({ post }: { post: Extract<FeedPost, { kind: 'blind-ra
   return (
     <View style={styles.stageContent}>
       <View style={[styles.eyebrow, { backgroundColor: post.visual.accentColor }]}>
-        <Text style={styles.eyebrowText}>{complete ? 'Ranking complete' : `Item ${itemIndex + 1} of ${post.items.length}`}</Text>
+        <Text style={styles.eyebrowText}>{complete ? 'Ranking complete' : `Item ${itemIndex + 1} of ${draw.length}`}</Text>
       </View>
       <Text style={styles.prompt}>{complete ? 'Your final ranking' : 'Where does this go?'}</Text>
       <View style={styles.revealCard}>
@@ -55,13 +64,15 @@ function BlindRankingStage({ post }: { post: Extract<FeedPost, { kind: 'blind-ra
         <Pressable accessibilityRole="button" onPress={reset} style={styles.resetButton}>
           <Text style={styles.resetText}>Play again</Text>
         </Pressable>
-      ) : <Text style={styles.helperText}>Empty choices stay available for the next reveal</Text>}
+      ) : <Text style={styles.helperText}>Random draw from {post.items.length} possibilities</Text>}
     </View>
   );
 }
 
 function BracketStage({ post }: { post: Extract<FeedPost, { kind: 'bracket' }> }) {
-  const initialParticipants = post.participants.length >= 2 ? [...post.participants] : [...post.matchup];
+  const drawSize = post.participants.length >= 8 ? 8 : post.participants.length >= 4 ? 4 : 2;
+  const createDraw = () => sampleItems(post.participants.length >= 2 ? post.participants : post.matchup, drawSize);
+  const [initialParticipants, setInitialParticipants] = useState(() => post.participants.slice(0, drawSize));
   const [round, setRound] = useState<string[]>(initialParticipants);
   const [pairIndex, setPairIndex] = useState(0);
   const [advanced, setAdvanced] = useState<string[]>([]);
@@ -70,6 +81,15 @@ function BracketStage({ post }: { post: Extract<FeedPost, { kind: 'bracket' }> }
   const matchNumber = Math.floor(pairIndex / 2) + 1;
   const totalMatches = Math.ceil(round.length / 2);
   const roundName = round.length <= 2 ? 'Final' : round.length <= 4 ? 'Semifinal' : round.length <= 8 ? 'Quarterfinal' : `Round of ${round.length}`;
+
+  useEffect(() => {
+    const nextParticipants = sampleItems(post.participants.length >= 2 ? post.participants : post.matchup, drawSize);
+    setInitialParticipants(nextParticipants);
+    setRound(nextParticipants);
+    setPairIndex(0);
+    setAdvanced([]);
+    setChampion(undefined);
+  }, [drawSize, post]);
 
   const pickWinner = (winner: string) => {
     const winners = [...advanced, winner];
@@ -88,7 +108,9 @@ function BracketStage({ post }: { post: Extract<FeedPost, { kind: 'bracket' }> }
   };
 
   const reset = () => {
-    setRound(initialParticipants);
+    const nextParticipants = createDraw();
+    setInitialParticipants(nextParticipants);
+    setRound(nextParticipants);
     setPairIndex(0);
     setAdvanced([]);
     setChampion(undefined);
@@ -126,7 +148,7 @@ function BracketStage({ post }: { post: Extract<FeedPost, { kind: 'bracket' }> }
       </View>}
       {champion ? (
         <Pressable accessibilityRole="button" onPress={reset} style={styles.resetButton}><Text style={styles.resetText}>Run it back</Text></Pressable>
-      ) : <Text style={styles.helperText}>Tap a winner to advance the bracket</Text>}
+      ) : <Text style={styles.helperText}>Random field from {post.participants.length} contenders</Text>}
     </View>
   );
 }

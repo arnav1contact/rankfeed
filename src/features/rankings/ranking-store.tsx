@@ -1,7 +1,8 @@
-import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type PropsWithChildren } from 'react';
 
 import type { FeedPost } from '@/src/features/feed/types';
 import { mockFeedPosts } from '@/src/mock-data';
+import { shuffleItems } from './random';
 
 export type RankingFormat = FeedPost['kind'];
 
@@ -16,6 +17,7 @@ type RankingStoreValue = {
   posts: readonly FeedPost[];
   createdCount: number;
   publishRanking: (input: CreateRankingInput) => void;
+  shuffleFeed: () => void;
 };
 
 const RankingStoreContext = createContext<RankingStoreValue | null>(null);
@@ -45,7 +47,7 @@ function createPost(input: CreateRankingInput): FeedPost {
   } as const;
 
   if (input.format === 'bracket') {
-    const participantCount = input.items.length <= 2 ? 2 : input.items.length <= 4 ? 4 : 8;
+    const participantCount = input.items.length <= 2 ? 2 : input.items.length <= 4 ? 4 : input.items.length <= 8 ? 8 : 16;
     const participants = fillItems(input.items, ['Wildcard one', 'Wildcard two', 'Wildcard three', 'Wildcard four', 'Wildcard five', 'Wildcard six'], participantCount);
     return {
       ...base,
@@ -69,7 +71,7 @@ function createPost(input: CreateRankingInput): FeedPost {
     ...base,
     kind: 'blind-ranking',
     currentItem: input.items[0] || 'Your first pick',
-    items: fillItems(input.items, ['First pick', 'Second pick', 'Third pick', 'Fourth pick', 'Fifth pick'], 5),
+    items: input.items.length > 0 ? input.items.slice(0, 24) : ['First pick', 'Second pick', 'Third pick', 'Fourth pick', 'Fifth pick'],
     progressLabel: 'Item 1 of 5',
     slotCount: 5,
   };
@@ -78,15 +80,17 @@ function createPost(input: CreateRankingInput): FeedPost {
 export function RankingStoreProvider({ children }: PropsWithChildren) {
   const [posts, setPosts] = useState<FeedPost[]>(() => [...mockFeedPosts]);
   const [createdCount, setCreatedCount] = useState(0);
+  const shuffleFeed = useCallback(() => setPosts((current) => shuffleItems(current)), []);
 
   const value = useMemo<RankingStoreValue>(() => ({
     createdCount,
     posts,
+    shuffleFeed,
     publishRanking: (input) => {
       setPosts((current) => [createPost(input), ...current]);
       setCreatedCount((current) => current + 1);
     },
-  }), [createdCount, posts]);
+  }), [createdCount, posts, shuffleFeed]);
 
   return <RankingStoreContext.Provider value={value}>{children}</RankingStoreContext.Provider>;
 }

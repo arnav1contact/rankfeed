@@ -9,4 +9,8 @@ export const mockCreators = {
   jordan: { id: 'creator-jordan', displayName: 'Jordan Kim', handle: '@soundtakes', avatarLabel: 'JK' },
   avery: { id: 'creator-avery', displayName: 'Avery Brooks', handle: '@averyoutside', avatarLabel: 'AB' },
   theo: { id: 'creator-theo', displayName: 'Theo Grant', handle: '@rewatchtheo', avatarLabel: 'TG' },
+  leila: { id: 'creator-leila', displayName: 'Leila Morgan', handle: '@leilalists', avatarLabel: 'LM' },
+  marcus: { id: 'creator-marcus', displayName: 'Marcus Reed', handle: '@marcusranks', avatarLabel: 'MR' },
+  priya: { id: 'creator-priya', displayName: 'Priya Shah', handle: '@priyapicks', avatarLabel: 'PS' },
+  cam: { id: 'creator-cam', displayName: 'Cam Wilson', handle: '@thebracketcam', avatarLabel: 'CW' },
 } as const satisfies Record<string, Creator>;
