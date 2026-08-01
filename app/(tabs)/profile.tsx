@@ -10,7 +10,7 @@ import { colors, radii, spacing } from '@/src/theme/tokens';
 export default function ProfileScreen() {
   const router = useRouter();
   const { error: authError, isConfigured, isLoading: isAuthLoading, signOut, user } = useAuth();
-  const { createdPosts, followedCreatorIds, isReady, savedPosts, storageError } = useRankingStore();
+  const { createdPosts, followedCreatorIds, isReady, savedPosts, storageError, syncError, syncStatus } = useRankingStore();
   const displayEmail = user?.email ?? null;
   const avatarLabel = displayEmail ? displayEmail.slice(0, 2).toUpperCase() : 'YO';
 
@@ -22,8 +22,8 @@ export default function ProfileScreen() {
           <Text style={styles.name}>{displayEmail ? 'Rankfeed account' : 'Your Rankings'}</Text>
           <Text numberOfLines={1} style={styles.handle}>{displayEmail ?? (isConfigured ? 'Sign in to sync your profile' : 'Local developer profile')}</Text>
         </View>
-        <View accessibilityLabel={isReady ? 'Local data loaded' : 'Loading local data'} style={styles.settings}>
-          <Ionicons color={storageError ? '#FF879A' : '#C8FF64'} name={storageError ? 'cloud-offline-outline' : isReady ? 'cloud-done-outline' : 'cloud-outline'} size={20} />
+        <View accessibilityLabel={syncStatus === 'synced' ? 'Cloud data synchronized' : isReady ? 'Local data loaded' : 'Loading local data'} style={styles.settings}>
+          <Ionicons color={storageError || syncError ? '#FF879A' : '#C8FF64'} name={storageError || syncError ? 'cloud-offline-outline' : syncStatus === 'syncing' ? 'cloud-upload-outline' : isReady ? 'cloud-done-outline' : 'cloud-outline'} size={20} />
         </View>
       </View>
 
@@ -91,8 +91,8 @@ export default function ProfileScreen() {
       ))}
 
       <View style={styles.note}>
-        <Ionicons color={storageError ? '#FF879A' : '#9EA1AA'} name={storageError ? 'warning-outline' : 'phone-portrait-outline'} size={19} />
-        <Text style={styles.noteText}>{storageError ?? (user ? 'Your account session is securely restored across launches. Ranking sync will move to the backend repository in the next milestone.' : 'Rankings, likes, saves, follows, and comments are currently stored on this device.')}</Text>
+        <Ionicons color={storageError || syncError ? '#FF879A' : '#9EA1AA'} name={storageError || syncError ? 'warning-outline' : user ? 'cloud-done-outline' : 'phone-portrait-outline'} size={19} />
+        <Text style={styles.noteText}>{storageError ?? syncError ?? (user && syncStatus === 'synced' ? 'Rankings and social activity are synchronized with your account. Local storage remains available for fast startup and mock content.' : 'Rankings, likes, saves, follows, and comments are currently stored on this device.')}</Text>
       </View>
     </ScreenShell>
   );

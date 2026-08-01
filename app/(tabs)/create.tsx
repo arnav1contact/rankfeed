@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ScreenShell } from '@/src/components/screen-shell';
 import { useAuth } from '@/src/features/auth/auth-provider';
 import { useRankingStore, type RankingFormat } from '@/src/features/rankings/ranking-store';
+import type { FeedPost } from '@/src/features/feed/types';
 import { mockRankingTemplates } from '@/src/mock-data';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 
@@ -15,47 +16,66 @@ const formats: readonly { format: RankingFormat; icon: React.ComponentProps<type
   { format: 'completed-result', icon: 'list-outline', label: 'Top list' },
 ];
 
+function postItems(post: FeedPost | undefined) {
+  if (!post) return [];
+  if (post.kind === 'bracket') return [...post.participants];
+  if (post.kind === 'completed-result') return post.resultItems.map((item) => item.label);
+  return [...post.items];
+}
+
+function plainTopic(topic: string) {
+  return topic.replace(/ · (Blind ranking|Bracket|Completed ranking)$/i, '');
+}
+
 export default function CreateScreen() {
   const router = useRouter();
   const { isConfigured, user } = useAuth();
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
-  const { publishRanking } = useRankingStore();
+  const { posts, publishRanking } = useRankingStore();
   const initialTemplate = mockRankingTemplates.find((item) => item.id === templateId);
-  const [format, setFormat] = useState<RankingFormat>(initialTemplate?.format ?? 'blind-ranking');
-  const [title, setTitle] = useState(initialTemplate?.title ?? '');
-  const [topic, setTopic] = useState(initialTemplate?.topic ?? '');
-  const [items, setItems] = useState(initialTemplate?.items.join(', ') ?? '');
+  const initialPost = posts.find((post) => post.id === templateId || post.templateId === templateId);
+  const [format, setFormat] = useState<RankingFormat>(initialTemplate?.format ?? initialPost?.kind ?? 'blind-ranking');
+  const [title, setTitle] = useState(initialTemplate?.title ?? initialPost?.title ?? '');
+  const [topic, setTopic] = useState(initialTemplate?.topic ?? (initialPost ? plainTopic(initialPost.topic) : ''));
+  const [items, setItems] = useState(initialTemplate?.items.join(', ') ?? postItems(initialPost).join(', '));
   const [attempted, setAttempted] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const canPublish = title.trim().length >= 3 && topic.trim().length >= 2;
   const itemLabel = useMemo(() => format === 'bracket' ? 'First matchup' : format === 'completed-result' ? 'Ranked items' : 'First reveal', [format]);
 
   useEffect(() => {
     const template = mockRankingTemplates.find((item) => item.id === templateId);
-    if (!template) return;
-    setFormat(template.format);
-    setTitle(template.title);
-    setTopic(template.topic);
-    setItems(template.items.join(', '));
-  }, [templateId]);
+    const post = posts.find((item) => item.id === templateId || item.templateId === templateId);
+    if (!template && !post) return;
+    setFormat(template?.format ?? post?.kind ?? 'blind-ranking');
+    setTitle(template?.title ?? post?.title ?? '');
+    setTopic(template?.topic ?? (post ? plainTopic(post.topic) : ''));
+    setItems(template?.items.join(', ') ?? postItems(post).join(', '));
+  }, [posts, templateId]);
 
-  const publish = () => {
+  const publish = async () => {
     if (isConfigured && !user) {
       router.push('/sign-in');
       return;
     }
     setAttempted(true);
-    if (!canPublish) return;
-    publishRanking({
-      format,
-      items: items.split(',').map((item) => item.trim()).filter(Boolean),
-      title: title.trim(),
-      topic: topic.trim(),
-    });
-    setTitle('');
-    setTopic('');
-    setItems('');
-    setAttempted(false);
-    router.navigate('/rankings');
+    if (!canPublish || isPublishing) return;
+    setIsPublishing(true);
+    try {
+      await publishRanking({
+        format,
+        items: items.split(',').map((item) => item.trim()).filter(Boolean),
+        title: title.trim(),
+        topic: topic.trim(),
+      });
+      setTitle('');
+      setTopic('');
+      setItems('');
+      setAttempted(false);
+      router.navigate('/rankings');
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -134,9 +154,10 @@ export default function CreateScreen() {
 
       <Pressable
         accessibilityRole="button"
-        onPress={publish}
-        style={({ pressed }) => [styles.publish, pressed && styles.pressed]}>
-        <Text style={styles.publishText}>Publish ranking</Text>
+        disabled={isPublishing}
+        onPress={() => void publish()}
+        style={({ pressed }) => [styles.publish, isPublishing && styles.publishDisabled, pressed && styles.pressed]}>
+        <Text style={styles.publishText}>{isPublishing ? 'Publishing…' : 'Publish ranking'}</Text>
         <Ionicons color="#13160D" name="arrow-forward" size={20} />
       </Pressable>
     </ScreenShell>
@@ -172,5 +193,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm, justifyContent: 'center', marginTop: spacing.sm, minHeight: 54, paddingHorizontal: spacing.xl,
   },
   publishText: { color: '#13160D', fontSize: 16, fontWeight: '900' },
+  publishDisabled: { opacity: 0.55 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
 });

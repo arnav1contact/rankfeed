@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -15,13 +15,17 @@ type CommentsModalProps = {
 
 export function CommentsModal({ onClose, post, visible }: CommentsModalProps) {
   const insets = useSafeAreaInsets();
-  const { addComment, commentsByPost } = useRankingStore();
+  const { addComment, commentsByPost, loadComments, syncStatus } = useRankingStore();
   const [draft, setDraft] = useState('');
   const comments = commentsByPost[post.id] ?? [];
 
+  useEffect(() => {
+    if (visible) void loadComments(post.id);
+  }, [loadComments, post.id, visible]);
+
   const submit = () => {
     if (!draft.trim()) return;
-    addComment(post.id, draft);
+    void addComment(post.id, draft);
     setDraft('');
   };
 
@@ -43,13 +47,13 @@ export function CommentsModal({ onClose, post, visible }: CommentsModalProps) {
               <View style={styles.empty}>
                 <Ionicons color="#747781" name="chatbubbles-outline" size={32} />
                 <Text style={styles.emptyTitle}>Start the conversation</Text>
-                <Text style={styles.emptyText}>Your comments are saved on this device.</Text>
+                <Text style={styles.emptyText}>{syncStatus === 'synced' ? 'Be the first to add a synced comment.' : 'Your comments are saved on this device.'}</Text>
               </View>
             ) : comments.map((comment) => (
               <View key={comment.id} style={styles.comment}>
-                <View style={styles.avatar}><Text style={styles.avatarText}>YO</Text></View>
+                <View style={styles.avatar}><Text style={styles.avatarText}>{comment.avatarLabel ?? 'RF'}</Text></View>
                 <View style={styles.commentBody}>
-                  <Text style={styles.commentAuthor}>You</Text>
+                  <Text style={styles.commentAuthor}>{comment.isOwn ? 'You' : comment.authorName ?? 'Rankfeed creator'}</Text>
                   <Text style={styles.commentText}>{comment.text}</Text>
                 </View>
               </View>

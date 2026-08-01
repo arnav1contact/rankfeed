@@ -1,5 +1,5 @@
 import type { FeedPost } from '@/src/features/feed/types';
-import type { CreateRankingInput, LocalComment } from '@/src/features/rankings/ranking-store';
+import type { CreateRankingInput, LocalComment } from '@/src/features/rankings/types';
 
 export type CursorPage<T> = {
   items: readonly T[];
@@ -32,6 +32,12 @@ export type ReportInput = {
   details?: string;
 };
 
+export type SocialSnapshot = {
+  followedCreatorIds: readonly string[];
+  likedPostIds: readonly string[];
+  savedPostIds: readonly string[];
+};
+
 export interface AuthRepository {
   getSession(): Promise<AuthSession | null>;
   signInWithEmail(email: string): Promise<void>;
@@ -54,6 +60,7 @@ export interface FeedRepository {
 }
 
 export interface RankingRepository {
+  createPublished(input: CreateRankingInput): Promise<FeedPost>;
   createDraft(input: CreateRankingInput): Promise<FeedPost>;
   updateDraft(postId: string, input: CreateRankingInput): Promise<FeedPost>;
   publish(postId: string): Promise<FeedPost>;
@@ -61,12 +68,15 @@ export interface RankingRepository {
 }
 
 export interface SocialRepository {
-  like(postId: string): Promise<void>;
-  unlike(postId: string): Promise<void>;
-  save(postId: string): Promise<void>;
-  unsave(postId: string): Promise<void>;
+  getSnapshot(userId: string): Promise<SocialSnapshot>;
+  like(userId: string, postId: string): Promise<void>;
+  unlike(userId: string, postId: string): Promise<void>;
+  save(userId: string, postId: string): Promise<void>;
+  unsave(userId: string, postId: string): Promise<void>;
+  follow(userId: string, profileId: string): Promise<void>;
+  unfollow(userId: string, profileId: string): Promise<void>;
   listComments(postId: string, cursor?: string): Promise<CursorPage<LocalComment>>;
-  addComment(postId: string, text: string): Promise<LocalComment>;
+  addComment(userId: string, postId: string, text: string): Promise<LocalComment>;
   removeComment(commentId: string): Promise<void>;
 }
 

@@ -3,6 +3,7 @@ import { type ComponentProps } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { useRankingStore } from '@/src/features/rankings/ranking-store';
+import { isRemoteId } from '@/src/data/supabase-ranking-repositories';
 import { colors, spacing } from '@/src/theme/tokens';
 import type { FeedPost } from '../types';
 
@@ -50,6 +51,9 @@ export function EngagementRail({ onOpenComments, post }: EngagementRailProps) {
   const liked = likedPostIds.includes(post.id);
   const saved = savedPostIds.includes(post.id);
   const localCommentCount = commentsByPost[post.id]?.length ?? 0;
+  const commentCount = isRemoteId(post.id)
+    ? Math.max(post.engagement.comments, localCommentCount)
+    : post.engagement.comments + localCommentCount;
 
   const sharePost = () => {
     Share.share({ message: `${post.title}\n\nRank it on RankFeed.` }).catch(() => undefined);
@@ -58,7 +62,7 @@ export function EngagementRail({ onOpenComments, post }: EngagementRailProps) {
   return (
     <View accessibilityLabel="Post actions" style={styles.rail}>
       <ActionButton accessibilityLabel={liked ? 'Unlike post' : 'Like post'} active={liked} activeColor="#FF5D7A" activeIcon="heart" count={post.engagement.likes + (liked ? 1 : 0)} icon="heart-outline" onPress={() => toggleLike(post.id)} />
-      <ActionButton accessibilityLabel="Open comments" count={post.engagement.comments + localCommentCount} icon="chatbubble-outline" onPress={onOpenComments} />
+      <ActionButton accessibilityLabel="Open comments" count={commentCount} icon="chatbubble-outline" onPress={onOpenComments} />
       <ActionButton accessibilityLabel={saved ? 'Remove saved post' : 'Save post'} active={saved} activeColor={post.visual.accentColor} activeIcon="bookmark" count={post.engagement.saves + (saved ? 1 : 0)} icon="bookmark-outline" onPress={() => toggleSave(post.id)} />
       <ActionButton accessibilityLabel="Share post" count={post.engagement.shares} icon="arrow-redo-outline" onPress={sharePost} />
     </View>
