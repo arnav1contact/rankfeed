@@ -4,23 +4,26 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
 import { useAuth } from '@/src/features/auth/auth-provider';
+import { useAccountProfile } from '@/src/features/profile/profile-provider';
 import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { error: authError, isConfigured, isLoading: isAuthLoading, signOut, user } = useAuth();
+  const { error: profileError, profile } = useAccountProfile();
   const { createdPosts, followedCreatorIds, isReady, savedPosts, storageError, syncError, syncStatus } = useRankingStore();
   const displayEmail = user?.email ?? null;
-  const avatarLabel = displayEmail ? displayEmail.slice(0, 2).toUpperCase() : 'YO';
+  const avatarLabel = profile?.displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || (displayEmail ? displayEmail.slice(0, 2).toUpperCase() : 'YO');
 
   return (
     <ScreenShell eyebrow="Your corner" title="Profile">
       <View style={styles.identity}>
         <View style={styles.avatar}><Text style={styles.avatarText}>{avatarLabel}</Text></View>
         <View style={styles.identityCopy}>
-          <Text style={styles.name}>{displayEmail ? 'Rankfeed account' : 'Your Rankings'}</Text>
-          <Text numberOfLines={1} style={styles.handle}>{displayEmail ?? (isConfigured ? 'Sign in to sync your profile' : 'Local developer profile')}</Text>
+          <Text style={styles.name}>{profile?.displayName ?? (displayEmail ? 'Rankfeed account' : 'Your Rankings')}</Text>
+          <Text numberOfLines={1} style={styles.handle}>{profile ? `@${profile.handle}` : displayEmail ?? (isConfigured ? 'Sign in to sync your profile' : 'Local developer profile')}</Text>
+          {profile?.bio ? <Text numberOfLines={2} style={styles.bio}>{profile.bio}</Text> : null}
         </View>
         <View accessibilityLabel={syncStatus === 'synced' ? 'Cloud data synchronized' : isReady ? 'Local data loaded' : 'Loading local data'} style={styles.settings}>
           <Ionicons color={storageError || syncError ? '#FF879A' : '#C8FF64'} name={storageError || syncError ? 'cloud-offline-outline' : syncStatus === 'syncing' ? 'cloud-upload-outline' : isReady ? 'cloud-done-outline' : 'cloud-outline'} size={20} />
@@ -29,10 +32,16 @@ export default function ProfileScreen() {
 
       {isConfigured ? (
         user ? (
-          <Pressable disabled={isAuthLoading} onPress={() => void signOut().catch(() => undefined)} style={({ pressed }) => [styles.accountAction, pressed && styles.pressed]}>
-            <Ionicons color="#C8FF64" name="cloud-done-outline" size={20} />
-            <Text style={styles.accountActionText}>Signed in · Sign out</Text>
-          </Pressable>
+          <View style={styles.accountActions}>
+            <Pressable onPress={() => router.push('/edit-profile')} style={({ pressed }) => [styles.editAction, pressed && styles.pressed]}>
+              <Ionicons color="#13160D" name="create-outline" size={19} />
+              <Text style={styles.editActionText}>Edit profile</Text>
+            </Pressable>
+            <Pressable disabled={isAuthLoading} onPress={() => void signOut().catch(() => undefined)} style={({ pressed }) => [styles.accountAction, pressed && styles.pressed]}>
+              <Ionicons color="#C8FF64" name="log-out-outline" size={19} />
+              <Text style={styles.accountActionText}>Sign out</Text>
+            </Pressable>
+          </View>
         ) : (
           <Pressable onPress={() => router.push('/sign-in')} style={({ pressed }) => [styles.signInAction, pressed && styles.pressed]}>
             <Ionicons color="#13160D" name="person-outline" size={20} />
@@ -48,7 +57,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       )}
-      {authError ? <Text accessibilityRole="alert" style={styles.authError}>{authError}</Text> : null}
+      {authError || profileError ? <Text accessibilityRole="alert" style={styles.authError}>{authError ?? profileError}</Text> : null}
 
       <View style={styles.stats}>
         <View style={styles.stat}><Text style={styles.statValue}>{createdPosts.length}</Text><Text style={styles.statLabel}>Published</Text></View>
@@ -105,9 +114,13 @@ const styles = StyleSheet.create({
   identityCopy: { flex: 1 },
   name: { color: colors.foreground, fontSize: 20, fontWeight: '900' },
   handle: { color: '#8F929C', fontSize: 13, marginTop: 3 },
+  bio: { color: '#AEB1B8', fontSize: 12, lineHeight: 17, marginTop: spacing.xs },
   settings: { alignItems: 'center', backgroundColor: '#191B22', borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
-  accountAction: { alignItems: 'center', alignSelf: 'flex-start', borderColor: '#39412C', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  accountActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  accountAction: { alignItems: 'center', borderColor: '#39412C', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   accountActionText: { color: colors.foreground, fontSize: 13, fontWeight: '800' },
+  editAction: { alignItems: 'center', backgroundColor: '#C8FF64', borderRadius: radii.pill, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  editActionText: { color: '#13160D', fontSize: 13, fontWeight: '900' },
   signInAction: { alignItems: 'center', backgroundColor: '#C8FF64', borderRadius: radii.pill, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', marginTop: spacing.lg, minHeight: 50, paddingHorizontal: spacing.lg },
   signInText: { color: '#13160D', fontSize: 14, fontWeight: '900' },
   devMode: { alignItems: 'center', backgroundColor: '#15181B', borderColor: '#333A2A', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg, padding: spacing.md },

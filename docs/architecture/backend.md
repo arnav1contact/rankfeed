@@ -14,7 +14,7 @@ Project ownership, organization, billing, deployment region, and production iden
 
 ## Client boundary
 
-Screens consume repository interfaces from `src/data/repositories.ts`. During migration, the existing local store remains the fallback implementation. Supabase implementations will live under `src/data/supabase/` and translate database rows into domain models.
+Screens consume repository interfaces from `src/data/repositories.ts`. During migration, the existing local store remains the fallback implementation. Supabase implementations use the `src/data/supabase-*.ts` naming convention and translate database rows into domain models.
 
 The application only receives a Supabase publishable key. Service-role keys and moderation automation belong exclusively in trusted server or Edge Function environments.
 
@@ -38,10 +38,19 @@ The application only receives a Supabase publishable key. Service-role keys and 
 - Block filtering is enforced in feed repository queries and will move to a database function before launch.
 - Video upload policies and moderation status are added before media upload ships.
 
+## Account lifecycle
+
+- The auth trigger creates a matching public profile for each new account.
+- Profile edits go through the RLS-protected `profiles` table.
+- Permanent deletion is handled by the authenticated `delete-account` Edge Function. The client never receives an admin or secret key.
+- Deleting `auth.users` cascades through the profile, authored posts, comments, follows, likes, saves, ranking sessions, reports, and notifications.
+- Deploy the function with JWT verification enabled: `supabase functions deploy delete-account`.
+
 ## Migration workflow
 
 1. Develop migrations locally under `supabase/migrations/`.
 2. Reset and seed the local database.
 3. Generate `src/data/database.types.ts` from the local schema.
 4. Run repository integration tests against local Supabase.
-5. Apply migrations to staging, validate, then promote the same immutable migration to production.
+5. Deploy authenticated Edge Functions to staging and exercise account deletion with a disposable test user.
+6. Apply migrations to staging, validate, then promote the same immutable migration and functions to production.
