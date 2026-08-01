@@ -28,6 +28,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    ['expo-web-browser', { experimentalLauncherActivity: false }],
     [
       'expo-splash-screen',
       {

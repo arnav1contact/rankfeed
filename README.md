@@ -12,6 +12,7 @@ A mobile-first social app for creating, discovering, and playing interactive ran
 - Creator post management and owner-only comment deletion
 - Search and category filtering in Explore
 - Home activity and session-aware Profile views
+- Passwordless email, Google, and Apple account entry points
 
 Creator video space is deliberately reserved behind the ranking overlays for a future media integration. Created rankings, completed plays, likes, saves, follows, and comments persist locally across app restarts. Signed-in ranking sessions and published results sync through Supabase when the backend is configured.
 

@@ -1,10 +1,14 @@
 import { makeRedirectUri } from 'expo-auth-session';
 import { getQueryParams } from 'expo-auth-session/build/QueryParams';
+import * as WebBrowser from 'expo-web-browser';
 import type { Session, User } from '@supabase/supabase-js';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 
 import { isBackendConfigured } from '@/src/config/environment';
 import { getSupabaseClient } from '@/src/lib/supabase';
+
+export type OAuthProvider = 'apple' | 'google';
 
 type AuthContextValue = {
   error: string | null;
@@ -15,6 +19,7 @@ type AuthContextValue = {
   clearError: () => void;
   completeSessionFromUrl: (url: string) => Promise<boolean>;
   sendMagicLink: (email: string) => Promise<void>;
+  signInWithProvider: (provider: OAuthProvider) => Promise<boolean>;
   signOut: () => Promise<void>;
 };
 
@@ -103,6 +108,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const signInWithProvider = useCallback(async (provider: OAuthProvider) => {
+    if (!isBackendConfigured) throw new Error('Connect Supabase in .env before signing in.');
+    setError(null);
+    try {
+      const redirectTo = makeRedirectUri({ path: 'auth/callback', scheme: 'rankfeed' });
+      const { data, error: oauthError } = await getSupabaseClient().auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          skipBrowserRedirect: Platform.OS !== 'web',
+        },
+      });
+      if (oauthError) throw oauthError;
+      if (Platform.OS === 'web') return false;
+      if (!data.url) throw new Error(`${provider === 'apple' ? 'Apple' : 'Google'} sign-in did not return an authorization URL.`);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type !== 'success') return false;
+      return completeSessionFromUrl(result.url);
+    } catch (caught) {
+      const nextError = messageFrom(caught);
+      setError(nextError);
+      throw new Error(nextError);
+    }
+  }, [completeSessionFromUrl]);
+
   const signOut = useCallback(async () => {
     if (!isBackendConfigured) return;
     setError(null);
@@ -120,10 +150,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isConfigured: isBackendConfigured,
     isLoading,
     sendMagicLink,
+    signInWithProvider,
     session,
     signOut,
     user: session?.user ?? null,
-  }), [completeSessionFromUrl, error, isLoading, sendMagicLink, session, signOut]);
+  }), [completeSessionFromUrl, error, isLoading, sendMagicLink, session, signInWithProvider, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
