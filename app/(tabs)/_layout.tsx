@@ -3,7 +3,6 @@ import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { colors } from '@/src/theme/tokens';
-import { RankingStoreProvider } from '@/src/features/rankings/ranking-store';
 
 type TabIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -21,8 +20,7 @@ function CreateIcon() {
 
 export default function TabLayout() {
   return (
-    <RankingStoreProvider>
-      <Tabs
+    <Tabs
       initialRouteName="rankings"
       screenOptions={{
         headerShown: false,
@@ -74,8 +72,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => <TabIcon color={color} focused={focused} name="person" />,
         }}
       />
-      </Tabs>
-    </RankingStoreProvider>
+    </Tabs>
   );
 }
 

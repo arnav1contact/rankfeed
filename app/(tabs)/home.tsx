@@ -9,26 +9,27 @@ import { colors, radii, spacing } from '@/src/theme/tokens';
 export default function HomeScreen() {
   const router = useRouter();
   const { followedCreatorIds, posts } = useRankingStore();
-  const followedPosts = posts.filter((post) => followedCreatorIds.includes(post.creator.id));
-  const activityPosts = followedPosts.length > 0 ? followedPosts : posts;
+  const playablePosts = posts.filter((post) => post.kind !== 'completed-result');
+  const followedPosts = playablePosts.filter((post) => followedCreatorIds.includes(post.creator.id));
+  const activityPosts = followedPosts.length > 0 ? followedPosts : playablePosts;
 
   return (
     <ScreenShell eyebrow="Good to see you" title="What’s ranking">
       <Pressable onPress={() => router.navigate('/rankings')} style={({ pressed }) => [styles.hero, pressed && styles.pressed]}>
         <View style={styles.heroIcon}><Ionicons color="#13160D" name="play" size={22} /></View>
         <View style={styles.heroCopy}>
-          <Text style={styles.heroKicker}>For you · {posts.length} live prompts</Text>
-          <Text style={styles.heroTitle}>Jump back into the ranking feed</Text>
+          <Text style={styles.heroKicker}>For you · {playablePosts.length} games ready</Text>
+          <Text style={styles.heroTitle}>Swipe through rankings you can play</Text>
         </View>
         <Ionicons color={colors.foreground} name="chevron-forward" size={22} />
       </Pressable>
 
       <View style={styles.sectionRow}>
-        <Text style={styles.sectionTitle}>{followedPosts.length > 0 ? 'From creators you follow' : 'Creators to discover'}</Text>
+        <Text style={styles.sectionTitle}>{followedPosts.length > 0 ? 'Play from creators you follow' : 'Pick a ranking to play'}</Text>
         <Pressable onPress={() => router.navigate('/rankings')}><Text style={styles.link}>See all</Text></Pressable>
       </View>
       {activityPosts.slice(0, 3).map((post) => (
-        <Pressable key={post.id} onPress={() => router.navigate('/rankings')} style={({ pressed }) => [styles.activity, pressed && styles.pressed]}>
+        <Pressable key={post.id} onPress={() => router.push({ pathname: '/play/[sourceId]', params: { sourceId: post.id } })} style={({ pressed }) => [styles.activity, pressed && styles.pressed]}>
           <View style={[styles.avatar, { borderColor: post.visual.accentColor }]}><Text style={styles.avatarText}>{post.creator.avatarLabel}</Text></View>
           <View style={styles.activityCopy}>
             <Text style={styles.creator}>{post.creator.displayName} <Text style={styles.handle}>{post.creator.handle}</Text></Text>

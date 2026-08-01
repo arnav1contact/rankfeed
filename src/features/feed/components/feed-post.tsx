@@ -36,12 +36,9 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
 
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={styles.brand}>{APP_CONFIG.displayName}</Text>
-        <View style={styles.feedTabs}>
-          <Text style={styles.inactiveTab}>Following</Text>
-          <View style={styles.activeTabWrap}>
-            <Text style={styles.activeTab}>For You</Text>
-            <View style={[styles.activeTabLine, { backgroundColor: post.visual.accentColor }]} />
-          </View>
+        <View style={styles.feedTitleWrap}>
+          <Text style={styles.feedTitle}>Play feed</Text>
+          <Text style={styles.feedHint}>Swipe for another</Text>
         </View>
         <Pressable accessibilityLabel="Search" accessibilityRole="button" hitSlop={10} onPress={() => router.navigate('/explore')}>
           <Ionicons color={colors.foreground} name="search-outline" size={25} />
@@ -88,7 +85,7 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
               { backgroundColor: post.visual.accentColor },
               pressed && styles.buttonPressed,
             ]}>
-            <Text style={styles.ctaText}>Use this template</Text>
+            <Text style={styles.ctaText}>Customize this ranking</Text>
             <Ionicons color="#17151A" name="arrow-forward" size={18} />
           </Pressable>
         </View>
@@ -126,11 +123,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, position: 'absolute', top: 0, width: '100%', zIndex: 2,
   },
   brand: { color: colors.foreground, fontSize: 17, fontWeight: '900', letterSpacing: -0.4, width: 78 },
-  feedTabs: { alignItems: 'center', flexDirection: 'row', gap: spacing.lg },
-  inactiveTab: { color: colors.muted, fontSize: 14, fontWeight: '700' },
-  activeTabWrap: { alignItems: 'center', gap: spacing.xs },
-  activeTab: { color: colors.foreground, fontSize: 14, fontWeight: '800' },
-  activeTabLine: { borderRadius: radii.pill, height: 3, width: 22 },
+  feedTitleWrap: { alignItems: 'center' },
+  feedTitle: { color: colors.foreground, fontSize: 14, fontWeight: '900' },
+  feedHint: { color: colors.muted, fontSize: 9, fontWeight: '700', marginTop: 2, textTransform: 'uppercase' },
   content: {
     alignItems: 'center', flex: 1, justifyContent: 'center', paddingBottom: 230,
     paddingHorizontal: spacing.lg, paddingTop: 90, pointerEvents: 'box-none',
