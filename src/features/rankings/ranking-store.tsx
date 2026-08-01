@@ -52,6 +52,8 @@ type RankingStoreValue = {
   blockCreator: (creatorId: string) => Promise<void>;
   unblockCreator: (creatorId: string) => Promise<void>;
   reportPost: (postId: string, reason: ReportReason) => Promise<void>;
+  deletePost: (postId: string) => Promise<void>;
+  deleteComment: (postId: string, commentId: string) => Promise<void>;
   shuffleFeed: () => void;
   toggleLike: (postId: string) => void;
   toggleSave: (postId: string) => void;
@@ -293,6 +295,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   const addComment = useCallback(async (postId: string, text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+    if (isConfigured && !user) throw new Error('Sign in before adding a comment.');
     const comment: LocalComment = { id: `comment-${Date.now()}`, text: trimmed, createdAt: new Date().toISOString(), authorName: 'You', avatarLabel: 'YO', isOwn: true };
     setCommentsByPost((current) => ({ ...current, [postId]: [...(current[postId] ?? []), comment] }));
     if (!user || !isRemoteId(postId)) return;
@@ -309,9 +312,9 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       setSyncError(errorMessage(error));
       setSyncStatus('error');
     }
-  }, [user]);
+  }, [isConfigured, user]);
   const loadComments = useCallback(async (postId: string) => {
-    if (!user || !isRemoteId(postId)) return;
+    if (!isRemoteId(postId)) return;
     try {
       const comments = await supabaseSocialRepository.listComments(postId);
       setCommentsByPost((current) => ({ ...current, [postId]: [...comments.items] }));
@@ -319,7 +322,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       setSyncError(errorMessage(error));
       setSyncStatus('error');
     }
-  }, [user]);
+  }, []);
   const publishRanking = useCallback(async (input: CreateRankingInput) => {
     const localPost = createPost(input);
     setCreatedPosts((current) => [localPost, ...current]);
@@ -443,6 +446,51 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       throw error;
     }
   }, [user]);
+  const deletePost = useCallback(async (postId: string) => {
+    const post = createdPosts.find((item) => item.id === postId);
+    if (!post) throw new Error('This published ranking is no longer available.');
+    if (user && isRemoteId(postId)) {
+      setSyncStatus('syncing');
+      try {
+        await supabaseRankingRepository.remove(postId);
+        setSyncError(undefined);
+        setSyncStatus('synced');
+      } catch (error) {
+        setSyncError(errorMessage(error));
+        setSyncStatus('error');
+        throw error;
+      }
+    }
+    setCreatedPosts((current) => current.filter((item) => item.id !== postId));
+    setLikedPostIds((current) => current.filter((id) => id !== postId));
+    setSavedPostIds((current) => current.filter((id) => id !== postId));
+    setCommentsByPost((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setCompletedPlays((current) => current.map((play) => play.publishedPostId === postId ? { ...play, publishedPostId: undefined } : play));
+  }, [createdPosts, user]);
+  const deleteComment = useCallback(async (postId: string, commentId: string) => {
+    const existing = commentsByPost[postId]?.find((comment) => comment.id === commentId);
+    if (!existing?.isOwn) return;
+    if (user && isRemoteId(commentId)) {
+      setSyncStatus('syncing');
+      try {
+        await supabaseSocialRepository.removeComment(commentId);
+        setSyncError(undefined);
+        setSyncStatus('synced');
+      } catch (error) {
+        setSyncError(errorMessage(error));
+        setSyncStatus('error');
+        throw error;
+      }
+    }
+    setCommentsByPost((current) => ({
+      ...current,
+      [postId]: (current[postId] ?? []).filter((comment) => comment.id !== commentId),
+    }));
+  }, [commentsByPost, user]);
 
   const value = useMemo<RankingStoreValue>(() => ({
     posts,
@@ -475,7 +523,9 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     blockCreator,
     unblockCreator,
     reportPost,
-  }), [addComment, blockCreator, blockedCreatorIds, blockedCreators, commentsByPost, completedPlays, createdPosts, deleteDraft, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishCompletedPlay, publishRanking, recordCompletion, reportPost, reportedPostIds, saveDraft, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, unblockCreator, visibleDrafts]);
+    deletePost,
+    deleteComment,
+  }), [addComment, blockCreator, blockedCreatorIds, blockedCreators, commentsByPost, completedPlays, createdPosts, deleteComment, deleteDraft, deletePost, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishCompletedPlay, publishRanking, recordCompletion, reportPost, reportedPostIds, saveDraft, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, unblockCreator, visibleDrafts]);
 
   return <RankingStoreContext.Provider value={value}>{children}</RankingStoreContext.Provider>;
 }

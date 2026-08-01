@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/src/features/auth/auth-provider';
 import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 import type { FeedPost } from '../types';
@@ -14,8 +16,10 @@ type CommentsModalProps = {
 };
 
 export function CommentsModal({ onClose, post, visible }: CommentsModalProps) {
+  const router = useRouter();
+  const { isConfigured, user } = useAuth();
   const insets = useSafeAreaInsets();
-  const { addComment, commentsByPost, loadComments, syncStatus } = useRankingStore();
+  const { addComment, commentsByPost, deleteComment, loadComments, syncStatus } = useRankingStore();
   const [draft, setDraft] = useState('');
   const comments = commentsByPost[post.id] ?? [];
 
@@ -25,8 +29,20 @@ export function CommentsModal({ onClose, post, visible }: CommentsModalProps) {
 
   const submit = () => {
     if (!draft.trim()) return;
-    void addComment(post.id, draft);
+    if (isConfigured && !user) {
+      onClose();
+      router.push('/sign-in');
+      return;
+    }
+    void addComment(post.id, draft).catch(() => undefined);
     setDraft('');
+  };
+
+  const confirmDelete = (commentId: string) => {
+    Alert.alert('Delete comment?', 'This removes your comment permanently.', [
+      { style: 'cancel', text: 'Cancel' },
+      { style: 'destructive', text: 'Delete', onPress: () => void deleteComment(post.id, commentId).catch(() => undefined) },
+    ]);
   };
 
   return (
@@ -53,7 +69,10 @@ export function CommentsModal({ onClose, post, visible }: CommentsModalProps) {
               <View key={comment.id} style={styles.comment}>
                 <View style={styles.avatar}><Text style={styles.avatarText}>{comment.avatarLabel ?? 'RF'}</Text></View>
                 <View style={styles.commentBody}>
-                  <Text style={styles.commentAuthor}>{comment.isOwn ? 'You' : comment.authorName ?? 'Rankfeed creator'}</Text>
+                  <View style={styles.commentHeader}>
+                    <Text style={styles.commentAuthor}>{comment.isOwn ? 'You' : comment.authorName ?? 'Rankfeed creator'}</Text>
+                    {comment.isOwn ? <Pressable accessibilityLabel="Delete your comment" hitSlop={8} onPress={() => confirmDelete(comment.id)}><Ionicons color="#9EA1AA" name="trash-outline" size={16} /></Pressable> : null}
+                  </View>
                   <Text style={styles.commentText}>{comment.text}</Text>
                 </View>
               </View>
@@ -97,6 +116,7 @@ const styles = StyleSheet.create({
   avatar: { alignItems: 'center', backgroundColor: '#C8FF64', borderRadius: 17, height: 34, justifyContent: 'center', width: 34 },
   avatarText: { color: '#13160D', fontSize: 10, fontWeight: '900' },
   commentBody: { backgroundColor: '#1B1D24', borderRadius: radii.md, flex: 1, padding: spacing.md },
+  commentHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   commentAuthor: { color: colors.foreground, fontSize: 12, fontWeight: '800' },
   commentText: { color: '#E1E2E5', fontSize: 14, lineHeight: 19, marginTop: 3 },
   composer: { alignItems: 'center', borderTopColor: '#292C34', borderTopWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.md },

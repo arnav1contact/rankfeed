@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { APP_CONFIG } from '@/src/config/app';
+import { useAuth } from '@/src/features/auth/auth-provider';
 import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 import type { FeedPost as FeedPostModel } from '../types';
@@ -18,6 +19,7 @@ type FeedPostProps = { post: FeedPostModel; viewportHeight: number };
 
 export function FeedPost({ post, viewportHeight }: FeedPostProps) {
   const router = useRouter();
+  const { isConfigured, user } = useAuth();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -25,6 +27,14 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
   const [completionSaved, setCompletionSaved] = useState(false);
   const { followedCreatorIds, recordCompletion, toggleFollow } = useRankingStore();
   const following = followedCreatorIds.includes(post.creator.id);
+  const ownPost = post.creator.id === user?.id || post.creator.id === 'creator-you';
+  const followCreator = () => {
+    if (isConfigured && !user) {
+      router.push('/sign-in');
+      return;
+    }
+    toggleFollow(post.creator.id);
+  };
 
   return (
     <View
@@ -75,14 +85,16 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
               <Text style={styles.creatorName}>{post.creator.displayName}</Text>
               <Text style={styles.creatorHandle}>{post.creator.handle}</Text>
             </View>
-            <Pressable
-              accessibilityLabel={`Follow ${post.creator.displayName}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: following }}
-              onPress={() => toggleFollow(post.creator.id)}
-              style={({ pressed }) => [styles.followButton, pressed && styles.buttonPressed]}>
-              <Text style={styles.followText}>{following ? 'Following' : 'Follow'}</Text>
-            </Pressable>
+            {ownPost ? <View style={styles.youBadge}><Text style={styles.youBadgeText}>You</Text></View> : (
+              <Pressable
+                accessibilityLabel={`Follow ${post.creator.displayName}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: following }}
+                onPress={followCreator}
+                style={({ pressed }) => [styles.followButton, pressed && styles.buttonPressed]}>
+                <Text style={styles.followText}>{following ? 'Following' : 'Follow'}</Text>
+              </Pressable>
+            )}
           </View>
           <Text numberOfLines={2} style={styles.caption}>{post.caption}</Text>
           <Pressable
@@ -186,6 +198,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: 7,
   },
   followText: { color: colors.foreground, fontSize: 12, fontWeight: '800' },
+  youBadge: { borderColor: 'rgba(200, 255, 100, 0.45)', borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 7 },
+  youBadgeText: { color: '#C8FF64', fontSize: 11, fontWeight: '900' },
   caption: {
     color: colors.foreground, fontSize: 14, lineHeight: 19, textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,

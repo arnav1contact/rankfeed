@@ -9,6 +9,7 @@ A mobile-first social app for creating, discovering, and playing interactive ran
 - Automatic offline draft saving with resume and discard controls
 - One-tap publishing from a completed game into Finished Lists
 - Feed-level reporting and creator blocking with Profile unblock controls
+- Creator post management and owner-only comment deletion
 - Search and category filtering in Explore
 - Home activity and session-aware Profile views
 

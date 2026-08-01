@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
 import { useAuth } from '@/src/features/auth/auth-provider';
@@ -12,9 +13,24 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { error: authError, isConfigured, isLoading: isAuthLoading, signOut, user } = useAuth();
   const { error: profileError, profile } = useAccountProfile();
-  const { blockedCreators, completedPlays, createdPosts, drafts, isReady, savedPosts, storageError, syncError, syncStatus, unblockCreator } = useRankingStore();
+  const { blockedCreators, completedPlays, createdPosts, deletePost, drafts, isReady, savedPosts, storageError, syncError, syncStatus, unblockCreator } = useRankingStore();
+  const [deletingPostId, setDeletingPostId] = useState<string>();
   const displayEmail = user?.email ?? null;
   const avatarLabel = profile?.displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || (displayEmail ? displayEmail.slice(0, 2).toUpperCase() : 'YO');
+
+  const confirmDeletePost = (postId: string, title: string) => {
+    Alert.alert('Delete published ranking?', `“${title}” will be permanently removed along with its likes, comments, saves, and ranking sessions.`, [
+      { style: 'cancel', text: 'Cancel' },
+      {
+        style: 'destructive',
+        text: 'Delete',
+        onPress: () => {
+          setDeletingPostId(postId);
+          void deletePost(postId).catch(() => undefined).finally(() => setDeletingPostId(undefined));
+        },
+      },
+    ]);
+  };
 
   return (
     <ScreenShell eyebrow="Your corner" title="Profile">
@@ -78,6 +94,29 @@ export default function ProfileScreen() {
         <View style={styles.actionCopy}><Text style={styles.actionTitle}>View the live feed</Text><Text style={styles.actionText}>See your posts alongside the community</Text></View>
         <Ionicons color="#777A84" name="chevron-forward" size={19} />
       </Pressable>
+
+      {createdPosts.length > 0 ? (
+        <>
+          <View style={styles.savedHeader}>
+            <Text style={styles.sectionTitle}>Published rankings</Text>
+            <Text style={styles.savedCount}>{createdPosts.length}</Text>
+          </View>
+          {createdPosts.slice(0, 8).map((post) => (
+            <View key={post.id} style={styles.publishedRow}>
+              <Pressable onPress={() => router.push({ pathname: '/play/[sourceId]', params: { sourceId: post.id } })} style={({ pressed }) => [styles.publishedOpen, pressed && styles.pressed]}>
+                <View style={[styles.savedAccent, { backgroundColor: post.visual.accentColor }]} />
+                <View style={styles.actionCopy}>
+                  <Text numberOfLines={1} style={styles.actionTitle}>{post.title}</Text>
+                  <Text numberOfLines={1} style={styles.actionText}>{post.kind === 'completed-result' ? 'Finished list' : post.kind === 'bracket' ? 'Bracket' : 'Blind ranking'} · {post.topic}</Text>
+                </View>
+              </Pressable>
+              <Pressable accessibilityLabel={`Delete ${post.title}`} disabled={deletingPostId === post.id} onPress={() => confirmDeletePost(post.id, post.title)} style={({ pressed }) => [styles.deletePostButton, pressed && styles.pressed]}>
+                <Ionicons color="#FF879A" name={deletingPostId === post.id ? 'hourglass-outline' : 'trash-outline'} size={18} />
+              </Pressable>
+            </View>
+          ))}
+        </>
+      ) : null}
 
       {drafts.length > 0 ? (
         <>
@@ -199,6 +238,9 @@ const styles = StyleSheet.create({
   savedEmpty: { alignItems: 'center', backgroundColor: '#12141A', borderRadius: radii.md, gap: spacing.sm, padding: spacing.xl },
   savedEmptyText: { color: '#8F929C', fontSize: 13 },
   savedRow: { alignItems: 'center', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 64, paddingVertical: spacing.sm },
+  publishedRow: { alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', minHeight: 68, paddingRight: spacing.sm },
+  publishedOpen: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.md, minHeight: 68, paddingLeft: spacing.sm },
+  deletePostButton: { alignItems: 'center', backgroundColor: 'rgba(255, 135, 154, 0.08)', borderRadius: 17, height: 34, justifyContent: 'center', width: 34 },
   historyRow: { alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 68, paddingHorizontal: spacing.sm },
   historyIcon: { alignItems: 'center', backgroundColor: 'rgba(200, 255, 100, 0.1)', borderRadius: 16, height: 42, justifyContent: 'center', width: 42 },
   draftIcon: { alignItems: 'center', backgroundColor: 'rgba(255, 203, 107, 0.1)', borderRadius: 16, height: 42, justifyContent: 'center', width: 42 },

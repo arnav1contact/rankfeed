@@ -210,6 +210,10 @@ export const supabaseRankingRepository = {
       }];
     });
   },
+  async remove(postId: string) {
+    const { error } = await getSupabaseClient().from('posts').delete().eq('id', postId);
+    if (error) throw error;
+  },
 };
 
 export const supabaseSocialRepository = {

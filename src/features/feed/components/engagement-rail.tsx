@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { type ComponentProps } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { isRemoteId } from '@/src/data/supabase-ranking-repositories';
+import { useAuth } from '@/src/features/auth/auth-provider';
 import { colors, spacing } from '@/src/theme/tokens';
 import type { FeedPost } from '../types';
 
@@ -47,6 +49,8 @@ function ActionButton({ accessibilityLabel, active = false, activeColor = colors
 }
 
 export function EngagementRail({ onOpenComments, post }: EngagementRailProps) {
+  const router = useRouter();
+  const { isConfigured, user } = useAuth();
   const { commentsByPost, likedPostIds, savedPostIds, toggleLike, toggleSave } = useRankingStore();
   const liked = likedPostIds.includes(post.id);
   const saved = savedPostIds.includes(post.id);
@@ -55,15 +59,21 @@ export function EngagementRail({ onOpenComments, post }: EngagementRailProps) {
     ? Math.max(post.engagement.comments, localCommentCount)
     : post.engagement.comments + localCommentCount;
 
+  const requireAccount = () => {
+    if (!isConfigured || user) return false;
+    router.push('/sign-in');
+    return true;
+  };
+
   const sharePost = () => {
     Share.share({ message: `${post.title}\n\nRank it on RankFeed.` }).catch(() => undefined);
   };
 
   return (
     <View accessibilityLabel="Post actions" style={styles.rail}>
-      <ActionButton accessibilityLabel={liked ? 'Unlike post' : 'Like post'} active={liked} activeColor="#FF5D7A" activeIcon="heart" count={post.engagement.likes + (liked ? 1 : 0)} icon="heart-outline" onPress={() => toggleLike(post.id)} />
+      <ActionButton accessibilityLabel={liked ? 'Unlike post' : 'Like post'} active={liked} activeColor="#FF5D7A" activeIcon="heart" count={post.engagement.likes + (liked ? 1 : 0)} icon="heart-outline" onPress={() => { if (!requireAccount()) toggleLike(post.id); }} />
       <ActionButton accessibilityLabel="Open comments" count={commentCount} icon="chatbubble-outline" onPress={onOpenComments} />
-      <ActionButton accessibilityLabel={saved ? 'Remove saved post' : 'Save post'} active={saved} activeColor={post.visual.accentColor} activeIcon="bookmark" count={post.engagement.saves + (saved ? 1 : 0)} icon="bookmark-outline" onPress={() => toggleSave(post.id)} />
+      <ActionButton accessibilityLabel={saved ? 'Remove saved post' : 'Save post'} active={saved} activeColor={post.visual.accentColor} activeIcon="bookmark" count={post.engagement.saves + (saved ? 1 : 0)} icon="bookmark-outline" onPress={() => { if (!requireAccount()) toggleSave(post.id); }} />
       <ActionButton accessibilityLabel="Share post" count={post.engagement.shares} icon="arrow-redo-outline" onPress={sharePost} />
     </View>
   );
