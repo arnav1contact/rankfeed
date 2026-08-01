@@ -12,7 +12,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { error: authError, isConfigured, isLoading: isAuthLoading, signOut, user } = useAuth();
   const { error: profileError, profile } = useAccountProfile();
-  const { completedPlays, createdPosts, isReady, savedPosts, storageError, syncError, syncStatus } = useRankingStore();
+  const { completedPlays, createdPosts, drafts, isReady, savedPosts, storageError, syncError, syncStatus } = useRankingStore();
   const displayEmail = user?.email ?? null;
   const avatarLabel = profile?.displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || (displayEmail ? displayEmail.slice(0, 2).toUpperCase() : 'YO');
 
@@ -78,6 +78,25 @@ export default function ProfileScreen() {
         <View style={styles.actionCopy}><Text style={styles.actionTitle}>View the live feed</Text><Text style={styles.actionText}>See your posts alongside the community</Text></View>
         <Ionicons color="#777A84" name="chevron-forward" size={19} />
       </Pressable>
+
+      {drafts.length > 0 ? (
+        <>
+          <View style={styles.savedHeader}>
+            <Text style={styles.sectionTitle}>Drafts</Text>
+            <Text style={styles.savedCount}>{drafts.length}</Text>
+          </View>
+          {drafts.slice(0, 5).map((draft) => (
+            <Pressable key={draft.id} onPress={() => router.push({ pathname: '/create', params: { draftId: draft.id } })} style={({ pressed }) => [styles.historyRow, pressed && styles.pressed]}>
+              <View style={styles.draftIcon}><Ionicons color="#FFCB6B" name="document-text-outline" size={20} /></View>
+              <View style={styles.actionCopy}>
+                <Text numberOfLines={1} style={styles.actionTitle}>{draft.title.trim() || 'Untitled ranking'}</Text>
+                <Text numberOfLines={1} style={styles.actionText}>{draft.topic.trim() || 'No topic yet'} · Edited {new Date(draft.updatedAt).toLocaleDateString()}</Text>
+              </View>
+              <Ionicons color="#777A84" name="chevron-forward" size={18} />
+            </Pressable>
+          ))}
+        </>
+      ) : null}
 
       <View style={styles.savedHeader}>
         <Text style={styles.sectionTitle}>Recent results</Text>
@@ -163,6 +182,7 @@ const styles = StyleSheet.create({
   savedRow: { alignItems: 'center', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 64, paddingVertical: spacing.sm },
   historyRow: { alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 68, paddingHorizontal: spacing.sm },
   historyIcon: { alignItems: 'center', backgroundColor: 'rgba(200, 255, 100, 0.1)', borderRadius: 16, height: 42, justifyContent: 'center', width: 42 },
+  draftIcon: { alignItems: 'center', backgroundColor: 'rgba(255, 203, 107, 0.1)', borderRadius: 16, height: 42, justifyContent: 'center', width: 42 },
   savedAccent: { borderRadius: radii.pill, height: 38, width: 5 },
   action: {
     alignItems: 'center', backgroundColor: '#12141A', borderBottomColor: '#272A32', borderBottomWidth: 1,

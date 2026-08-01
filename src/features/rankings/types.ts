@@ -9,6 +9,12 @@ export type CreateRankingInput = {
   items: string[];
 };
 
+export type RankingDraft = CreateRankingInput & {
+  id: string;
+  updatedAt: string;
+  ownerId?: string;
+};
+
 export type LocalComment = {
   id: string;
   text: string;

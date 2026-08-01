@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
@@ -30,28 +30,63 @@ function plainTopic(topic: string) {
 export default function CreateScreen() {
   const router = useRouter();
   const { isConfigured, user } = useAuth();
-  const { templateId } = useLocalSearchParams<{ templateId?: string }>();
-  const { posts, publishRanking } = useRankingStore();
+  const { draftId: requestedDraftId, templateId } = useLocalSearchParams<{ draftId?: string; templateId?: string }>();
+  const { deleteDraft, drafts, isReady, posts, publishRanking, saveDraft } = useRankingStore();
+  const initialDraft = drafts.find((draft) => draft.id === requestedDraftId);
   const initialTemplate = mockRankingTemplates.find((item) => item.id === templateId);
   const initialPost = posts.find((post) => post.id === templateId || post.templateId === templateId);
-  const [format, setFormat] = useState<RankingFormat>(initialTemplate?.format ?? initialPost?.kind ?? 'blind-ranking');
-  const [title, setTitle] = useState(initialTemplate?.title ?? initialPost?.title ?? '');
-  const [topic, setTopic] = useState(initialTemplate?.topic ?? (initialPost ? plainTopic(initialPost.topic) : ''));
-  const [items, setItems] = useState(initialTemplate?.items.join(', ') ?? postItems(initialPost).join(', '));
+  const [activeDraftId, setActiveDraftId] = useState(requestedDraftId ?? `draft-${Date.now()}`);
+  const [format, setFormat] = useState<RankingFormat>(initialDraft?.format ?? initialTemplate?.format ?? initialPost?.kind ?? 'blind-ranking');
+  const [title, setTitle] = useState(initialDraft?.title ?? initialTemplate?.title ?? initialPost?.title ?? '');
+  const [topic, setTopic] = useState(initialDraft?.topic ?? initialTemplate?.topic ?? (initialPost ? plainTopic(initialPost.topic) : ''));
+  const [items, setItems] = useState(initialDraft?.items.join(', ') ?? initialTemplate?.items.join(', ') ?? postItems(initialPost).join(', '));
   const [attempted, setAttempted] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const hydratedSourceRef = useRef<string | undefined>(undefined);
   const canPublish = title.trim().length >= 3 && topic.trim().length >= 2;
   const itemLabel = useMemo(() => format === 'bracket' ? 'First matchup' : format === 'completed-result' ? 'Ranked items' : 'First reveal', [format]);
 
   useEffect(() => {
+    const sourceId = requestedDraftId ?? templateId;
+    if (!sourceId || hydratedSourceRef.current === sourceId) return;
+    const draft = drafts.find((item) => item.id === requestedDraftId);
     const template = mockRankingTemplates.find((item) => item.id === templateId);
     const post = posts.find((item) => item.id === templateId || item.templateId === templateId);
-    if (!template && !post) return;
-    setFormat(template?.format ?? post?.kind ?? 'blind-ranking');
-    setTitle(template?.title ?? post?.title ?? '');
-    setTopic(template?.topic ?? (post ? plainTopic(post.topic) : ''));
-    setItems(template?.items.join(', ') ?? postItems(post).join(', '));
-  }, [posts, templateId]);
+    if (!draft && !template && !post) return;
+    hydratedSourceRef.current = sourceId;
+    setActiveDraftId(draft?.id ?? `draft-${Date.now()}`);
+    setFormat(draft?.format ?? template?.format ?? post?.kind ?? 'blind-ranking');
+    setTitle(draft?.title ?? template?.title ?? post?.title ?? '');
+    setTopic(draft?.topic ?? template?.topic ?? (post ? plainTopic(post.topic) : ''));
+    setItems(draft?.items.join(', ') ?? template?.items.join(', ') ?? postItems(post).join(', '));
+  }, [drafts, posts, requestedDraftId, templateId]);
+
+  useEffect(() => {
+    if (!isReady || isPublishing || (!title.trim() && !topic.trim() && !items.trim())) return;
+    setDraftStatus('saving');
+    const timer = setTimeout(() => {
+      saveDraft(activeDraftId, {
+        format,
+        items: items.split(',').map((item) => item.trim()).filter(Boolean),
+        title,
+        topic,
+      });
+      setDraftStatus('saved');
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [activeDraftId, format, isPublishing, isReady, items, saveDraft, title, topic]);
+
+  const discardDraft = () => {
+    deleteDraft(activeDraftId);
+    setActiveDraftId(`draft-${Date.now()}`);
+    setFormat('blind-ranking');
+    setTitle('');
+    setTopic('');
+    setItems('');
+    setAttempted(false);
+    setDraftStatus('idle');
+  };
 
   const publish = async () => {
     if (isConfigured && !user) {
@@ -68,6 +103,8 @@ export default function CreateScreen() {
         title: title.trim(),
         topic: topic.trim(),
       });
+      deleteDraft(activeDraftId);
+      setActiveDraftId(`draft-${Date.now()}`);
       setTitle('');
       setTopic('');
       setItems('');
@@ -81,6 +118,17 @@ export default function CreateScreen() {
   return (
     <ScreenShell eyebrow="Start something" title="Create a ranking">
       <Text style={styles.intro}>Choose a format, add a prompt, and publish it straight into the Rankings feed.</Text>
+
+      {title || topic || items ? (
+        <View style={styles.draftBanner}>
+          <Ionicons color="#C8FF64" name={draftStatus === 'saving' ? 'sync-outline' : 'cloud-done-outline'} size={20} />
+          <View style={styles.accountCopy}>
+            <Text style={styles.draftTitle}>{draftStatus === 'saving' ? 'Saving draft…' : draftStatus === 'saved' ? 'Draft saved on this device' : 'Draft autosave is on'}</Text>
+            <Text style={styles.draftText}>You can safely leave and resume it from Profile.</Text>
+          </View>
+          <Pressable accessibilityLabel="Discard draft" onPress={discardDraft} style={({ pressed }) => [styles.discardButton, pressed && styles.pressed]}><Text style={styles.discardText}>Discard</Text></Pressable>
+        </View>
+      ) : null}
 
       {isConfigured && !user ? (
         <Pressable onPress={() => router.push('/sign-in')} style={({ pressed }) => [styles.accountBanner, pressed && styles.pressed]}>
@@ -170,6 +218,11 @@ const styles = StyleSheet.create({
   accountCopy: { flex: 1 },
   accountTitle: { color: colors.foreground, fontSize: 14, fontWeight: '900' },
   accountText: { color: '#9DA0A8', fontSize: 12, lineHeight: 17, marginTop: 3 },
+  draftBanner: { alignItems: 'center', backgroundColor: '#131713', borderColor: '#354128', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg, padding: spacing.md },
+  draftTitle: { color: colors.foreground, fontSize: 13, fontWeight: '900' },
+  draftText: { color: '#969A91', fontSize: 11, marginTop: 2 },
+  discardButton: { borderColor: '#596148', borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 7 },
+  discardText: { color: '#C8FF64', fontSize: 11, fontWeight: '900' },
   label: { color: colors.foreground, fontSize: 13, fontWeight: '800', marginBottom: spacing.sm },
   formats: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl },
   format: {

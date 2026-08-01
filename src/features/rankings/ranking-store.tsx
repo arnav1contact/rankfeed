@@ -6,16 +6,17 @@ import { useAuth } from '@/src/features/auth/auth-provider';
 import type { FeedPost } from '@/src/features/feed/types';
 import { mockFeedPosts } from '@/src/mock-data';
 import { shuffleItems } from './random';
-import type { CompletedPlay, CreateRankingInput, LocalComment, RankingOutcome } from './types';
+import type { CompletedPlay, CreateRankingInput, LocalComment, RankingDraft, RankingOutcome } from './types';
 
-export type { CreateRankingInput, LocalComment, RankingFormat } from './types';
+export type { CreateRankingInput, LocalComment, RankingDraft, RankingFormat } from './types';
 
 export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error';
 
 type PersistedRankingState = {
-  version: 2;
+  version: 3;
   createdPosts: FeedPost[];
   completedPlays: CompletedPlay[];
+  drafts: RankingDraft[];
   likedPostIds: string[];
   savedPostIds: string[];
   followedCreatorIds: string[];
@@ -26,6 +27,7 @@ type RankingStoreValue = {
   posts: readonly FeedPost[];
   createdPosts: readonly FeedPost[];
   completedPlays: readonly CompletedPlay[];
+  drafts: readonly RankingDraft[];
   savedPosts: readonly FeedPost[];
   likedPostIds: readonly string[];
   savedPostIds: readonly string[];
@@ -38,6 +40,8 @@ type RankingStoreValue = {
   publishRanking: (input: CreateRankingInput) => Promise<FeedPost>;
   publishCompletedPlay: (playId: string) => Promise<FeedPost>;
   recordCompletion: (post: FeedPost, outcome: RankingOutcome) => Promise<CompletedPlay>;
+  saveDraft: (draftId: string, input: CreateRankingInput) => RankingDraft;
+  deleteDraft: (draftId: string) => void;
   shuffleFeed: () => void;
   toggleLike: (postId: string) => void;
   toggleSave: (postId: string) => void;
@@ -105,11 +109,12 @@ function readPersistedState(value: string | null): PersistedRankingState | null 
   if (!value) return null;
   try {
     const parsed = JSON.parse(value) as Omit<Partial<PersistedRankingState>, 'version'> & { version?: number };
-    if (parsed.version !== 1 && parsed.version !== 2) return null;
+    if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) return null;
     return {
-      version: 2,
+      version: 3,
       createdPosts: Array.isArray(parsed.createdPosts) ? parsed.createdPosts : [],
       completedPlays: Array.isArray(parsed.completedPlays) ? parsed.completedPlays : [],
+      drafts: Array.isArray(parsed.drafts) ? parsed.drafts : [],
       likedPostIds: Array.isArray(parsed.likedPostIds) ? parsed.likedPostIds : [],
       savedPostIds: Array.isArray(parsed.savedPostIds) ? parsed.savedPostIds : [],
       followedCreatorIds: Array.isArray(parsed.followedCreatorIds) ? parsed.followedCreatorIds : [],
@@ -125,6 +130,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => [...mockFeedPosts]);
   const [createdPosts, setCreatedPosts] = useState<FeedPost[]>([]);
   const [completedPlays, setCompletedPlays] = useState<CompletedPlay[]>([]);
+  const [drafts, setDrafts] = useState<RankingDraft[]>([]);
   const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
   const [followedCreatorIds, setFollowedCreatorIds] = useState<string[]>([]);
@@ -143,6 +149,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
         if (!persisted) return;
         setCreatedPosts(persisted.createdPosts);
         setCompletedPlays(persisted.completedPlays);
+        setDrafts(persisted.drafts);
         setLikedPostIds(persisted.likedPostIds);
         setSavedPostIds(persisted.savedPostIds);
         setFollowedCreatorIds(persisted.followedCreatorIds);
@@ -156,9 +163,10 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!isReady) return;
     const persisted: PersistedRankingState = {
-      version: 2,
+      version: 3,
       createdPosts,
       completedPlays,
+      drafts,
       likedPostIds,
       savedPostIds,
       followedCreatorIds,
@@ -167,7 +175,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
       .then(() => setStorageError(undefined))
       .catch(() => setStorageError('Changes could not be saved on this device.'));
-  }, [commentsByPost, completedPlays, createdPosts, followedCreatorIds, isReady, likedPostIds, savedPostIds]);
+  }, [commentsByPost, completedPlays, createdPosts, drafts, followedCreatorIds, isReady, likedPostIds, savedPostIds]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -213,6 +221,7 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   }, [isConfigured, isReady, user]);
 
   const posts = useMemo(() => [...createdPosts, ...feedPosts], [createdPosts, feedPosts]);
+  const visibleDrafts = useMemo(() => drafts.filter((draft) => !draft.ownerId || draft.ownerId === user?.id), [drafts, user?.id]);
   const savedPosts = useMemo(() => posts.filter((post) => savedPostIds.includes(post.id)), [posts, savedPostIds]);
   const shuffleFeed = useCallback(() => setFeedPosts((current) => shuffleItems(current)), []);
   const toggleLike = useCallback((postId: string) => {
@@ -342,11 +351,25 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     setCompletedPlays((current) => current.map((item) => item.id === playId ? { ...item, publishedPostId: publishedPost.id } : item));
     return publishedPost;
   }, [completedPlays, publishRanking]);
+  const saveDraft = useCallback((draftId: string, input: CreateRankingInput) => {
+    const draft: RankingDraft = {
+      ...input,
+      id: draftId,
+      ownerId: user?.id,
+      updatedAt: new Date().toISOString(),
+    };
+    setDrafts((current) => [draft, ...current.filter((item) => item.id !== draftId)].slice(0, 25));
+    return draft;
+  }, [user]);
+  const deleteDraft = useCallback((draftId: string) => {
+    setDrafts((current) => current.filter((draft) => draft.id !== draftId));
+  }, []);
 
   const value = useMemo<RankingStoreValue>(() => ({
     posts,
     createdPosts,
     completedPlays,
+    drafts: visibleDrafts,
     savedPosts,
     likedPostIds,
     savedPostIds,
@@ -365,7 +388,9 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     publishRanking,
     publishCompletedPlay,
     recordCompletion,
-  }), [addComment, commentsByPost, completedPlays, createdPosts, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishCompletedPlay, publishRanking, recordCompletion, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave]);
+    saveDraft,
+    deleteDraft,
+  }), [addComment, commentsByPost, completedPlays, createdPosts, deleteDraft, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishCompletedPlay, publishRanking, recordCompletion, saveDraft, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave, visibleDrafts]);
 
   return <RankingStoreContext.Provider value={value}>{children}</RankingStoreContext.Provider>;
 }

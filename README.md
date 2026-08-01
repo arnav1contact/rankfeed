@@ -6,6 +6,7 @@ A mobile-first social app for creating, discovering, and playing interactive ran
 - Full-screen vertical paging across typed mock ranking posts
 - Interactive blind-ranking slots and bracket choices with durable result history
 - A Create flow that publishes new rankings into the live session feed
+- Automatic offline draft saving with resume and discard controls
 - One-tap publishing from a completed game into Finished Lists
 - Search and category filtering in Explore
 - Home activity and session-aware Profile views
