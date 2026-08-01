@@ -31,5 +31,6 @@ export type CompletedPlay = RankingOutcome & {
   topic: string;
   completedAt: string;
   ownerId?: string;
+  publishedPostId?: string;
   syncState: 'local' | 'synced' | 'error';
 };

@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
+import { useAuth } from '@/src/features/auth/auth-provider';
 import { PostStage } from '@/src/features/feed/components/post-stage';
 import { useRankingStore } from '@/src/features/rankings/ranking-store';
 import { templateToFeedPost } from '@/src/features/rankings/template-post';
@@ -13,10 +14,12 @@ import type { CompletedPlay, RankingOutcome } from '@/src/features/rankings/type
 
 export default function PlayRankingScreen() {
   const router = useRouter();
+  const { isConfigured, user } = useAuth();
   const params = useLocalSearchParams<{ sourceId?: string | string[] }>();
   const sourceId = Array.isArray(params.sourceId) ? params.sourceId[0] : params.sourceId;
-  const { posts, recordCompletion } = useRankingStore();
+  const { posts, publishCompletedPlay, recordCompletion } = useRankingStore();
   const [completedPlay, setCompletedPlay] = useState<CompletedPlay>();
+  const [isPublishingResult, setIsPublishingResult] = useState(false);
   const template = mockRankingTemplates.find((item) => item.id === sourceId);
   const existingPost = posts.find((post) => post.id === sourceId || post.templateId === sourceId);
   const post = useMemo(() => template ? templateToFeedPost(template) : existingPost, [existingPost, template]);
@@ -33,6 +36,21 @@ export default function PlayRankingScreen() {
       : completedPlay.rankedItems.map((item, index) => `${index + 1}. ${item}`).join('\n');
     await Share.share({ message: `${completedPlay.title}\n${result}\n\nMade with Rankfeed` });
   }, [completedPlay]);
+
+  const postResult = useCallback(async () => {
+    if (!completedPlay || completedPlay.publishedPostId || isPublishingResult) return;
+    if (isConfigured && !user) {
+      router.push('/sign-in');
+      return;
+    }
+    setIsPublishingResult(true);
+    try {
+      const publishedPost = await publishCompletedPlay(completedPlay.id);
+      setCompletedPlay((current) => current ? { ...current, publishedPostId: publishedPost.id } : current);
+    } finally {
+      setIsPublishingResult(false);
+    }
+  }, [completedPlay, isConfigured, isPublishingResult, publishCompletedPlay, router, user]);
 
   if (!post) {
     return (
@@ -75,9 +93,18 @@ export default function PlayRankingScreen() {
               <Text style={styles.resultItem}>{item}</Text>
             </View>
           ))}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: Boolean(completedPlay.publishedPostId) || isPublishingResult }}
+            disabled={Boolean(completedPlay.publishedPostId) || isPublishingResult}
+            onPress={() => void postResult()}
+            style={({ pressed }) => [styles.postButton, completedPlay.publishedPostId && styles.postButtonComplete, pressed && styles.pressed]}>
+            <Ionicons color="#13160D" name={completedPlay.publishedPostId ? 'checkmark-circle-outline' : 'send-outline'} size={19} />
+            <Text style={styles.postButtonText}>{completedPlay.publishedPostId ? 'Posted to Finished Lists' : isPublishingResult ? 'Posting result…' : 'Post this result'}</Text>
+          </Pressable>
           <View style={styles.receiptActions}>
             <Pressable onPress={() => void shareResult()} style={({ pressed }) => [styles.receiptButton, pressed && styles.pressed]}><Ionicons color="#C8FF64" name="share-outline" size={18} /><Text style={styles.receiptButtonText}>Share</Text></Pressable>
-            <Pressable onPress={() => router.push('/profile')} style={({ pressed }) => [styles.receiptButton, pressed && styles.pressed]}><Ionicons color="#C8FF64" name="time-outline" size={18} /><Text style={styles.receiptButtonText}>History</Text></Pressable>
+            <Pressable onPress={() => completedPlay.publishedPostId ? router.push({ pathname: '/explore', params: { mode: 'results' } }) : router.push('/profile')} style={({ pressed }) => [styles.receiptButton, pressed && styles.pressed]}><Ionicons color="#C8FF64" name={completedPlay.publishedPostId ? 'people-outline' : 'time-outline'} size={18} /><Text style={styles.receiptButtonText}>{completedPlay.publishedPostId ? 'View lists' : 'History'}</Text></Pressable>
           </View>
         </View>
       ) : null}
@@ -107,6 +134,9 @@ const styles = StyleSheet.create({
   resultRow: { alignItems: 'center', backgroundColor: '#1A1D24', borderRadius: radii.sm, flexDirection: 'row', gap: spacing.md, minHeight: 40, paddingHorizontal: spacing.md },
   resultRank: { color: '#C8FF64', fontSize: 15, fontWeight: '900', textAlign: 'center', width: 22 },
   resultItem: { color: colors.foreground, flex: 1, fontSize: 13, fontWeight: '700' },
+  postButton: { alignItems: 'center', backgroundColor: '#C8FF64', borderRadius: radii.pill, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', marginTop: spacing.xs, minHeight: 46 },
+  postButtonComplete: { backgroundColor: '#A8D956' },
+  postButtonText: { color: '#13160D', fontSize: 13, fontWeight: '900' },
   receiptActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   receiptButton: { alignItems: 'center', borderColor: '#3A422B', borderRadius: radii.pill, borderWidth: 1, flex: 1, flexDirection: 'row', gap: spacing.xs, justifyContent: 'center', minHeight: 42 },
   receiptButtonText: { color: '#C8FF64', fontSize: 12, fontWeight: '800' },

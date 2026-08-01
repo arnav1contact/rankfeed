@@ -93,9 +93,9 @@ export default function ProfileScreen() {
           <View style={styles.historyIcon}><Ionicons color="#C8FF64" name={play.kind === 'bracket' ? 'trophy-outline' : 'podium-outline'} size={20} /></View>
           <View style={styles.actionCopy}>
             <Text numberOfLines={1} style={styles.actionTitle}>{play.title}</Text>
-            <Text numberOfLines={1} style={styles.actionText}>{play.kind === 'bracket' ? `Champion: ${play.rankedItems[0]}` : `#1 ${play.rankedItems[0]}`} · {new Date(play.completedAt).toLocaleDateString()}</Text>
+            <Text numberOfLines={1} style={styles.actionText}>{play.publishedPostId ? 'Posted · ' : ''}{play.kind === 'bracket' ? `Champion: ${play.rankedItems[0]}` : `#1 ${play.rankedItems[0]}`} · {new Date(play.completedAt).toLocaleDateString()}</Text>
           </View>
-          <Ionicons color="#777A84" name="chevron-forward" size={18} />
+          <Ionicons color={play.publishedPostId ? '#C8FF64' : '#777A84'} name={play.publishedPostId ? 'checkmark-circle-outline' : 'chevron-forward'} size={18} />
         </Pressable>
       ))}
 

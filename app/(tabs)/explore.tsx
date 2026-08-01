@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
@@ -13,11 +13,16 @@ type ExploreMode = 'play' | 'results';
 
 export default function ExploreScreen() {
   const router = useRouter();
+  const { mode: requestedMode } = useLocalSearchParams<{ mode?: string }>();
   const { posts } = useRankingStore();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<(typeof categories)[number]>('All');
   const [mode, setMode] = useState<ExploreMode>('play');
   const normalizedQuery = query.trim().toLowerCase();
+
+  useEffect(() => {
+    if (requestedMode === 'results' || requestedMode === 'play') setMode(requestedMode);
+  }, [requestedMode]);
 
   const playableTemplates = useMemo(() => mockRankingTemplates.filter((template) => {
     const matchesType = template.format !== 'completed-result';

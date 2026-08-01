@@ -81,6 +81,7 @@ function BracketStage({ onComplete, post }: { post: Extract<FeedPost, { kind: 'b
   const [round, setRound] = useState<string[]>(initialParticipants);
   const [pairIndex, setPairIndex] = useState(0);
   const [advanced, setAdvanced] = useState<string[]>([]);
+  const [eliminated, setEliminated] = useState<string[]>([]);
   const [champion, setChampion] = useState<string>();
   const matchup = [round[pairIndex], round[pairIndex + 1]] as const;
   const matchNumber = Math.floor(pairIndex / 2) + 1;
@@ -93,10 +94,14 @@ function BracketStage({ onComplete, post }: { post: Extract<FeedPost, { kind: 'b
     setRound(nextParticipants);
     setPairIndex(0);
     setAdvanced([]);
+    setEliminated([]);
     setChampion(undefined);
   }, [drawSize, post]);
 
   const pickWinner = (winner: string) => {
+    const loser = matchup[0] === winner ? matchup[1] : matchup[0];
+    const nextEliminated = loser ? [...eliminated, loser] : eliminated;
+    setEliminated(nextEliminated);
     const winners = [...advanced, winner];
     if (pairIndex + 2 < round.length) {
       setAdvanced(winners);
@@ -105,11 +110,12 @@ function BracketStage({ onComplete, post }: { post: Extract<FeedPost, { kind: 'b
     }
     if (winners.length === 1) {
       setChampion(winners[0]);
-      onComplete?.({ kind: 'bracket', rankedItems: [winners[0]] });
+      onComplete?.({ kind: 'bracket', rankedItems: [winners[0], ...[...nextEliminated].reverse()] });
       return;
     }
     setRound(winners);
     setAdvanced([]);
+    setEliminated([]);
     setPairIndex(0);
   };
 

@@ -35,7 +35,8 @@ type RankingStoreValue = {
   storageError?: string;
   syncError?: string;
   syncStatus: SyncStatus;
-  publishRanking: (input: CreateRankingInput) => Promise<void>;
+  publishRanking: (input: CreateRankingInput) => Promise<FeedPost>;
+  publishCompletedPlay: (playId: string) => Promise<FeedPost>;
   recordCompletion: (post: FeedPost, outcome: RankingOutcome) => Promise<CompletedPlay>;
   shuffleFeed: () => void;
   toggleLike: (postId: string) => void;
@@ -283,16 +284,18 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
   const publishRanking = useCallback(async (input: CreateRankingInput) => {
     const localPost = createPost(input);
     setCreatedPosts((current) => [localPost, ...current]);
-    if (!user) return;
+    if (!user) return localPost;
     setSyncStatus('syncing');
     try {
       const remotePost = await supabaseRankingRepository.createPublished(input);
       setCreatedPosts((current) => current.map((post) => post.id === localPost.id ? remotePost : post));
       setSyncError(undefined);
       setSyncStatus('synced');
+      return remotePost;
     } catch (error) {
       setSyncError(errorMessage(error));
       setSyncStatus('error');
+      return localPost;
     }
   }, [user]);
   const recordCompletion = useCallback(async (post: FeedPost, outcome: RankingOutcome) => {
@@ -327,6 +330,18 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
       return failed;
     }
   }, [user]);
+  const publishCompletedPlay = useCallback(async (playId: string) => {
+    const play = completedPlays.find((item) => item.id === playId);
+    if (!play) throw new Error('This completed ranking is no longer available.');
+    const publishedPost = await publishRanking({
+      format: 'completed-result',
+      title: play.title,
+      topic: play.topic.replace(/\s*[·•]\s*(Blind ranking|Bracket|Completed ranking)$/i, ''),
+      items: play.rankedItems,
+    });
+    setCompletedPlays((current) => current.map((item) => item.id === playId ? { ...item, publishedPostId: publishedPost.id } : item));
+    return publishedPost;
+  }, [completedPlays, publishRanking]);
 
   const value = useMemo<RankingStoreValue>(() => ({
     posts,
@@ -348,8 +363,9 @@ export function RankingStoreProvider({ children }: PropsWithChildren) {
     addComment,
     loadComments,
     publishRanking,
+    publishCompletedPlay,
     recordCompletion,
-  }), [addComment, commentsByPost, completedPlays, createdPosts, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishRanking, recordCompletion, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave]);
+  }), [addComment, commentsByPost, completedPlays, createdPosts, followedCreatorIds, isReady, likedPostIds, loadComments, posts, publishCompletedPlay, publishRanking, recordCompletion, savedPostIds, savedPosts, shuffleFeed, storageError, syncError, syncStatus, toggleFollow, toggleLike, toggleSave]);
 
   return <RankingStoreContext.Provider value={value}>{children}</RankingStoreContext.Provider>;
 }

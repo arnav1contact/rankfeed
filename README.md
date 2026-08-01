@@ -4,12 +4,13 @@ A mobile-first social app for creating, discovering, and playing interactive ran
 
 - A five-tab Reels-style layout with Rankings as the default tab
 - Full-screen vertical paging across typed mock ranking posts
-- Interactive blind-ranking slots and bracket choices
+- Interactive blind-ranking slots and bracket choices with durable result history
 - A Create flow that publishes new rankings into the live session feed
+- One-tap publishing from a completed game into Finished Lists
 - Search and category filtering in Explore
 - Home activity and session-aware Profile views
 
-Creator video space is deliberately reserved behind the ranking overlays for a future media integration. Created rankings, likes, saves, follows, and comments persist locally across app restarts.
+Creator video space is deliberately reserved behind the ranking overlays for a future media integration. Created rankings, completed plays, likes, saves, follows, and comments persist locally across app restarts. Signed-in ranking sessions and published results sync through Supabase when the backend is configured.
 
 ## Mock data
 
