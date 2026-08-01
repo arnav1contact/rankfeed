@@ -27,7 +27,7 @@ The mock catalog currently generates 48 feed posts and 16 completed results acro
 
 ## Requirements
 
-- Node.js 20.19.4 or newer (`.nvmrc` pins the minimum development version)
+- Node.js 22 or newer (`.nvmrc` pins the development version)
 - npm
 - Expo Go on an iPhone for the initial prototype
 
@@ -66,3 +66,15 @@ npx expo export --platform web
 ```
 
 The app name is temporary and centralized in `src/config/app.ts`.
+
+## Backend foundation
+
+The production data boundary is scaffolded for Supabase while the app continues to use its local repository during development.
+
+- Copy `.env.example` to `.env` after a hosted Supabase development project exists.
+- Database migrations and local configuration live in `supabase/`.
+- Product scope is documented in `docs/product/mvp.md`.
+- Backend decisions and environment promotion are documented in `docs/architecture/backend.md`.
+- Client features depend on repository contracts in `src/data/repositories.ts`.
+
+The hosted organization, projects, region, billing, and permanent bundle identifiers still need owner approval before provisioning.
