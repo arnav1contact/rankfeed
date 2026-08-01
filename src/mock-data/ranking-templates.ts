@@ -1,0 +1,14 @@
+import type { RankingTemplate } from './types';
+
+export const mockRankingTemplates = [
+  { id: 'template-ice-cream-01', format: 'blind-ranking', title: 'Blind rank these ice cream flavors', topic: 'Food', description: 'Commit each flavor before seeing the next one.', items: ['Mint chocolate chip', 'Cookie dough', 'Strawberry', 'Rocky road', 'Pistachio'], uses: 28400 },
+  { id: 'template-fast-food-01', format: 'blind-ranking', title: 'Fast-food fries showdown', topic: 'Food', description: 'No moving a fry after it lands.', items: ['McDonald’s', 'Five Guys', 'Wendy’s', 'Arby’s', 'Shake Shack'], uses: 19200 },
+  { id: 'template-albums-01', format: 'blind-ranking', title: 'Blind rank these classic albums', topic: 'Music', description: 'Five classics and five permanent slots.', items: ['Thriller', 'Rumours', 'Purple Rain', 'Back to Black', 'To Pimp a Butterfly'], uses: 33800 },
+  { id: 'template-travel-01', format: 'blind-ranking', title: 'Dream city weekend', topic: 'Travel', description: 'Rank the getaway before the next city appears.', items: ['Tokyo', 'Lisbon', 'Mexico City', 'Copenhagen', 'Cape Town'], uses: 12100 },
+  { id: 'template-weapons-01', format: 'bracket', title: 'Greatest mythical weapon', topic: 'Mythology', description: 'Eight legendary weapons enter the arena.', items: ['Excalibur', 'Mjölnir', 'Gungnir', 'Kusanagi', 'Trident of Poseidon', 'Sudarshana Chakra', 'Green Dragon Crescent Blade', 'Gram'], uses: 41700 },
+  { id: 'template-sitcom-01', format: 'bracket', title: 'Ultimate comfort sitcom', topic: 'TV', description: 'Pick one show from every head-to-head matchup.', items: ['The Office', 'Parks and Recreation', 'Friends', 'New Girl', 'Community', 'Brooklyn Nine-Nine', 'Abbott Elementary', 'Schitt’s Creek'], uses: 24600 },
+  { id: 'template-snacks-01', format: 'bracket', title: 'Best movie-night snack', topic: 'Food', description: 'Sweet and salty favorites compete.', items: ['Popcorn', 'Nachos', 'M&M’s', 'Pretzel bites', 'Sour gummies', 'Pizza', 'Ice cream', 'Chips'], uses: 30900 },
+  { id: 'template-pokemon-games-01', format: 'completed-result', title: 'My Pokémon game top five', topic: 'Gaming', description: 'Share your definitive top five games.', items: ['Emerald', 'Platinum', 'Black 2', 'HeartGold', 'Legends: Arceus'], uses: 22100 },
+  { id: 'template-breakfast-01', format: 'completed-result', title: 'Breakfast foods, ranked', topic: 'Food', description: 'Build the breakfast table of champions.', items: ['Breakfast burrito', 'Pancakes', 'Eggs Benedict', 'French toast', 'Bagel and lox'], uses: 17800 },
+  { id: 'template-movies-01', format: 'completed-result', title: 'Top five animated movies', topic: 'Movies', description: 'Your personal animation hall of fame.', items: ['Spirited Away', 'Spider-Verse', 'Ratatouille', 'The Lion King', 'Toy Story'], uses: 35200 },
+] as const satisfies readonly RankingTemplate[];

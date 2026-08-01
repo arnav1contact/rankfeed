@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
 
-import { seedPosts } from '@/src/features/feed/data/seed-posts';
 import type { FeedPost } from '@/src/features/feed/types';
+import { mockFeedPosts } from '@/src/mock-data';
 
 export type RankingFormat = FeedPost['kind'];
 
@@ -27,6 +27,10 @@ const profileCreator = {
   avatarLabel: 'YO',
 } as const;
 
+function fillItems(items: readonly string[], fallbacks: readonly string[], count: number) {
+  return [...items, ...fallbacks].slice(0, count);
+}
+
 function createPost(input: CreateRankingInput): FeedPost {
   const id = `post-created-${Date.now()}`;
   const base = {
@@ -41,10 +45,13 @@ function createPost(input: CreateRankingInput): FeedPost {
   } as const;
 
   if (input.format === 'bracket') {
+    const participantCount = input.items.length <= 2 ? 2 : input.items.length <= 4 ? 4 : 8;
+    const participants = fillItems(input.items, ['Wildcard one', 'Wildcard two', 'Wildcard three', 'Wildcard four', 'Wildcard five', 'Wildcard six'], participantCount);
     return {
       ...base,
       kind: 'bracket',
-      matchup: [input.items[0] || 'Option one', input.items[1] || 'Option two'],
+      matchup: [participants[0], participants[1]],
+      participants,
       roundLabel: 'Opening round · Match 1',
     };
   }
@@ -62,13 +69,14 @@ function createPost(input: CreateRankingInput): FeedPost {
     ...base,
     kind: 'blind-ranking',
     currentItem: input.items[0] || 'Your first pick',
+    items: fillItems(input.items, ['First pick', 'Second pick', 'Third pick', 'Fourth pick', 'Fifth pick'], 5),
     progressLabel: 'Item 1 of 5',
     slotCount: 5,
   };
 }
 
 export function RankingStoreProvider({ children }: PropsWithChildren) {
-  const [posts, setPosts] = useState<FeedPost[]>(() => [...seedPosts]);
+  const [posts, setPosts] = useState<FeedPost[]>(() => [...mockFeedPosts]);
   const [createdCount, setCreatedCount] = useState(0);
 
   const value = useMemo<RankingStoreValue>(() => ({

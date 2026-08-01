@@ -11,6 +11,17 @@ A mobile-first social app for creating, discovering, and playing interactive ran
 
 Creator video space is deliberately reserved behind the ranking overlays for a future media integration. Newly created rankings currently persist for the active app session only.
 
+## Mock data
+
+All display fixtures live in `src/mock-data/` and are separated by purpose:
+
+- `creators.ts` — reusable creator profiles
+- `ranking-templates.ts` — playable blind-ranking, bracket, and top-list templates
+- `completed-rankings.ts` — published creator results
+- `feed-posts.ts` — the mixed social feed assembled from those records
+
+`index.ts` is the public entry point for app features that consume mock data.
+
 ## Requirements
 
 - Node.js 20.19.4 or newer (`.nvmrc` pins the minimum development version)

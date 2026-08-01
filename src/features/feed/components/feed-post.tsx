@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,17 +13,11 @@ import { PostStage } from './post-stage';
 
 type FeedPostProps = { post: FeedPostModel; viewportHeight: number };
 
-function callToAction(post: FeedPostModel) {
-  switch (post.kind) {
-    case 'blind-ranking': return 'Start ranking';
-    case 'bracket': return 'Play bracket';
-    case 'completed-result': return 'Try this template';
-  }
-}
-
 export function FeedPost({ post, viewportHeight }: FeedPostProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const [following, setFollowing] = useState(false);
 
   return (
     <View
@@ -43,7 +39,7 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
             <View style={[styles.activeTabLine, { backgroundColor: post.visual.accentColor }]} />
           </View>
         </View>
-        <Pressable accessibilityLabel="Search" accessibilityRole="button" hitSlop={10}>
+        <Pressable accessibilityLabel="Search" accessibilityRole="button" hitSlop={10} onPress={() => router.navigate('/explore')}>
           <Ionicons color={colors.foreground} name="search-outline" size={25} />
         </Pressable>
       </View>
@@ -72,20 +68,23 @@ export function FeedPost({ post, viewportHeight }: FeedPostProps) {
             <Pressable
               accessibilityLabel={`Follow ${post.creator.displayName}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: following }}
+              onPress={() => setFollowing((current) => !current)}
               style={({ pressed }) => [styles.followButton, pressed && styles.buttonPressed]}>
-              <Text style={styles.followText}>Follow</Text>
+              <Text style={styles.followText}>{following ? 'Following' : 'Follow'}</Text>
             </Pressable>
           </View>
           <Text numberOfLines={2} style={styles.caption}>{post.caption}</Text>
           <Pressable
-            accessibilityLabel={`${callToAction(post)}: ${post.title}`}
+            accessibilityLabel={`Use this template: ${post.title}`}
             accessibilityRole="button"
+            onPress={() => router.push({ pathname: '/create', params: { templateId: post.templateId } })}
             style={({ pressed }) => [
               styles.cta,
               { backgroundColor: post.visual.accentColor },
               pressed && styles.buttonPressed,
             ]}>
-            <Text style={styles.ctaText}>{callToAction(post)}</Text>
+            <Text style={styles.ctaText}>Use this template</Text>
             <Ionicons color="#17151A" name="arrow-forward" size={18} />
           </Pressable>
         </View>

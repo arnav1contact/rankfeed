@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
 import { useRankingStore, type RankingFormat } from '@/src/features/rankings/ranking-store';
+import { mockRankingTemplates } from '@/src/mock-data';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 
 const formats: readonly { format: RankingFormat; icon: React.ComponentProps<typeof Ionicons>['name']; label: string }[] = [
@@ -15,14 +16,25 @@ const formats: readonly { format: RankingFormat; icon: React.ComponentProps<type
 
 export default function CreateScreen() {
   const router = useRouter();
+  const { templateId } = useLocalSearchParams<{ templateId?: string }>();
   const { publishRanking } = useRankingStore();
-  const [format, setFormat] = useState<RankingFormat>('blind-ranking');
-  const [title, setTitle] = useState('');
-  const [topic, setTopic] = useState('');
-  const [items, setItems] = useState('');
+  const initialTemplate = mockRankingTemplates.find((item) => item.id === templateId);
+  const [format, setFormat] = useState<RankingFormat>(initialTemplate?.format ?? 'blind-ranking');
+  const [title, setTitle] = useState(initialTemplate?.title ?? '');
+  const [topic, setTopic] = useState(initialTemplate?.topic ?? '');
+  const [items, setItems] = useState(initialTemplate?.items.join(', ') ?? '');
   const [attempted, setAttempted] = useState(false);
   const canPublish = title.trim().length >= 3 && topic.trim().length >= 2;
   const itemLabel = useMemo(() => format === 'bracket' ? 'First matchup' : format === 'completed-result' ? 'Ranked items' : 'First reveal', [format]);
+
+  useEffect(() => {
+    const template = mockRankingTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    setFormat(template.format);
+    setTitle(template.title);
+    setTopic(template.topic);
+    setItems(template.items.join(', '));
+  }, [templateId]);
 
   const publish = () => {
     setAttempted(true);

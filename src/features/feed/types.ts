@@ -1,18 +1,18 @@
-type Creator = {
+export type Creator = {
   id: string;
   displayName: string;
   handle: string;
   avatarLabel: string;
 };
 
-type Engagement = {
+export type Engagement = {
   likes: number;
   comments: number;
   saves: number;
   shares: number;
 };
 
-type PostVisual = {
+export type PostVisual = {
   backgroundColor: string;
   accentColor: string;
   emoji: string;
@@ -32,6 +32,7 @@ type BaseFeedPost = {
 export type BlindRankingFeedPost = BaseFeedPost & {
   kind: 'blind-ranking';
   currentItem: string;
+  items: readonly string[];
   progressLabel: string;
   slotCount: number;
 };
@@ -39,6 +40,7 @@ export type BlindRankingFeedPost = BaseFeedPost & {
 export type BracketFeedPost = BaseFeedPost & {
   kind: 'bracket';
   matchup: readonly [string, string];
+  participants: readonly string[];
   roundLabel: string;
 };
 

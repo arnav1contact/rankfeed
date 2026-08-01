@@ -5,9 +5,10 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components/screen-shell';
 import { useRankingStore } from '@/src/features/rankings/ranking-store';
+import { mockRankingTemplates } from '@/src/mock-data';
 import { colors, radii, spacing } from '@/src/theme/tokens';
 
-const categories = ['All', 'Food', 'Gaming', 'Mythology'] as const;
+const categories = ['All', 'Food', 'Gaming', 'Music', 'Travel', 'TV', 'Movies', 'Mythology'] as const;
 
 export default function ExploreScreen() {
   const router = useRouter();
@@ -19,6 +20,11 @@ export default function ExploreScreen() {
     const normalizedQuery = query.trim().toLowerCase();
     return matchesCategory && (!normalizedQuery || `${post.title} ${post.topic} ${post.creator.displayName}`.toLowerCase().includes(normalizedQuery));
   }), [category, posts, query]);
+  const templates = useMemo(() => mockRankingTemplates.filter((template) => {
+    const matchesCategory = category === 'All' || template.topic === category;
+    const normalizedQuery = query.trim().toLowerCase();
+    return matchesCategory && (!normalizedQuery || `${template.title} ${template.topic} ${template.description}`.toLowerCase().includes(normalizedQuery));
+  }), [category, query]);
 
   return (
     <ScreenShell eyebrow="Find your people" title="Explore">
@@ -69,6 +75,24 @@ export default function ExploreScreen() {
           <Text style={styles.emptyText}>Try another word or category.</Text>
         </View>
       )}
+
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionTitle}>Popular templates</Text>
+        <Text style={styles.count}>{templates.length} available</Text>
+      </View>
+      {templates.slice(0, 6).map((template) => (
+        <Pressable
+          key={template.id}
+          onPress={() => router.push({ pathname: '/create', params: { templateId: template.id } })}
+          style={({ pressed }) => [styles.templateCard, pressed && styles.pressed]}>
+          <View style={styles.templateIcon}><Ionicons color="#C8FF64" name={template.format === 'bracket' ? 'git-network-outline' : template.format === 'blind-ranking' ? 'eye-off-outline' : 'list-outline'} size={20} /></View>
+          <View style={styles.cardCopy}>
+            <Text style={styles.cardTitle}>{template.title}</Text>
+            <Text numberOfLines={1} style={styles.cardCreator}>{template.description}</Text>
+          </View>
+          <Text style={styles.useCount}>{template.uses >= 1000 ? `${Math.round(template.uses / 100) / 10}K` : template.uses}</Text>
+        </Pressable>
+      ))}
     </ScreenShell>
   );
 }
@@ -97,6 +121,12 @@ const styles = StyleSheet.create({
   cardTopic: { color: '#90939D', fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   cardTitle: { color: colors.foreground, fontSize: 16, fontWeight: '800', lineHeight: 20, marginTop: 3 },
   cardCreator: { color: '#90939D', fontSize: 12, marginTop: 5 },
+  templateCard: {
+    alignItems: 'center', backgroundColor: '#12141A', borderColor: '#252831', borderRadius: radii.md,
+    borderWidth: 1, flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm, minHeight: 74, padding: spacing.md,
+  },
+  templateIcon: { alignItems: 'center', backgroundColor: 'rgba(200, 255, 100, 0.1)', borderRadius: 14, height: 40, justifyContent: 'center', width: 40 },
+  useCount: { color: '#9EA1AA', fontSize: 11, fontWeight: '800' },
   empty: { alignItems: 'center', paddingVertical: 70 },
   emptyTitle: { color: colors.foreground, fontSize: 17, fontWeight: '800', marginTop: spacing.md },
   emptyText: { color: '#858893', fontSize: 13, marginTop: spacing.xs },
